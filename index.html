@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>2048: Суперсила</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="title">
+        <h1>2048</h1>
+        <span class="subtitle">Суперсила</span>
+      </div>
+      <div class="scores">
+        <div class="score-box">
+          <div class="score-label">СЧЁТ</div>
+          <div class="score-value" id="score">0</div>
+        </div>
+        <div class="score-box">
+          <div class="score-label">РЕКОРД</div>
+          <div class="score-value" id="best">0</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <button class="btn btn-new" id="btn-new">Новая игра</button>
+    </div>
+
+    <div id="board-wrap">
+      <div id="board">
+        <div id="grid-bg"></div>
+        <div id="tiles"></div>
+      </div>
+
+      <!-- Combo popup -->
+      <div id="combo" class="combo hidden"></div>
+
+      <!-- Overlay: game over / win -->
+      <div id="overlay" class="overlay hidden">
+        <div class="overlay-card">
+          <div class="overlay-emoji" id="overlay-emoji">💀</div>
+          <div class="overlay-title" id="overlay-title">Игра окончена</div>
+          <div class="overlay-sub" id="overlay-sub">Счёт: 0</div>
+          <button class="btn btn-reward" id="btn-continue">
+            <span class="reward-ico">▶</span> Продолжить за рекламу
+          </button>
+          <button class="btn btn-new" id="btn-restart">Начать заново</button>
+        </div>
+      </div>
+
+      <!-- Bomb targeting hint -->
+      <div id="bomb-hint" class="bomb-hint hidden">💣 Нажми на плитку, чтобы взорвать</div>
+    </div>
+
+    <div class="powerbar">
+      <button class="power" id="pw-undo" title="Отменить ход">
+        <span class="pw-ico">↩️</span>
+        <span class="pw-name">Отмена</span>
+      </button>
+      <button class="power" id="pw-bomb" title="Взорвать плитку">
+        <span class="pw-ico">💣</span>
+        <span class="pw-name">Бомба</span>
+      </button>
+      <button class="power" id="pw-shuffle" title="Перемешать поле">
+        <span class="pw-ico">🔀</span>
+        <span class="pw-name">Микс</span>
+      </button>
+    </div>
+
+    <p class="hint">Свайпай или управляй стрелками · собери плитку <b>2048</b></p>
+  </div>
+
+  <!-- Yandex Games SDK -->
+  <script src="https://yandex.ru/games/sdk/v2?v=2"></script>
+  <script src="js/yandex-sdk.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
