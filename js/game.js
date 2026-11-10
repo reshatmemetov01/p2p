@@ -23,6 +23,7 @@
   let bombMode = false;
   let undoSnapshot = null;    // снимок для отмены хода
   let gamesPlayed = 0;        // счётчик партий (для показа рекламы)
+  let bestTile = 0;           // самая большая собранная плитка (для поздравления)
 
   // ---- DOM ----
   const $ = (id) => document.getElementById(id);
@@ -170,6 +171,7 @@
     tilesEl.classList.remove('bombing');
     bombHint.classList.add('hidden');
     updateScore(0);
+    bestTile = 0;
     spawnTile();
     spawnTile();
     gamesPlayed++;
@@ -271,6 +273,14 @@
       if (gained > 0) updateScore(gained);
       if (mergeCount >= 2) showCombo(mergeCount, gained);
 
+      if (mergeCount > 0) {
+        const maxV = Math.max.apply(null, merged.map((m) => m.value));
+        if (window.GameAudio) { GameAudio.sfx('merge', Math.log2(maxV)); GameAudio.shake(boardEl); }
+        checkMilestone(maxV);
+      } else if (window.GameAudio) {
+        GameAudio.sfx('move');
+      }
+
       spawnTile();
 
       // Победа
@@ -309,6 +319,21 @@
     return false;
   }
 
+  // ===== Рекорд плитки =====
+  function checkMilestone(v) {
+    if (v > bestTile) {
+      bestTile = v;
+      if (v >= 128) {
+        comboEl.textContent = '🏆 ' + v + '!';
+        comboEl.classList.remove('hidden', 'show');
+        void comboEl.offsetWidth;
+        comboEl.classList.add('show');
+        setTimeout(() => comboEl.classList.add('hidden'), 900);
+        if (window.GameAudio) GameAudio.sfx('coin');
+      }
+    }
+  }
+
   // ===== Комбо =====
   function showCombo(count, gained) {
     comboEl.textContent = 'КОМБО ×' + count + '  +' + gained;
@@ -343,6 +368,7 @@
   function doUndo() {
     if (!undoSnapshot || busy) return;
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       const snap = undoSnapshot;
       undoSnapshot = null;
       restore(snap);
@@ -354,6 +380,7 @@
   function doShuffle() {
     if (busy) return;
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       const values = tiles.filter((t) => !t._mergeInto).map((t) => t.value);
       clearAllTiles();
       emptyGrid();
@@ -377,6 +404,7 @@
   function enterBombMode() {
     if (busy || bombMode) return;
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       bombMode = true;
       tilesEl.classList.add('bombing');
       bombHint.classList.remove('hidden');
@@ -385,6 +413,7 @@
 
   function bombTile(tile) {
     if (!bombMode) return;
+    if (window.GameAudio) GameAudio.sfx('clear');
     grid[tile.row][tile.col] = null;
     tile.el.style.transition = 'transform .2s ease, opacity .2s ease';
     tile.el.style.transform += ' scale(0)';
@@ -401,6 +430,7 @@
 
   // ===== Экран конца / победы =====
   function showOverlay(type) {
+    if (window.GameAudio) GameAudio.sfx(type === 'win' ? 'win' : 'fail');
     if (type === 'win') {
       overlayEmoji.textContent = '🏆';
       overlayTitle.textContent = 'Победа! 2048!';
@@ -422,6 +452,7 @@
   // Продолжить после проигрыша: смотрим рекламу → освобождаем место
   function continueAfterAd() {
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       // Убираем 3 самых маленьких плитки, чтобы дать место
       const sorted = tiles.filter((t) => !t._mergeInto).slice().sort((a, b) => a.value - b.value);
       const toClear = sorted.slice(0, Math.min(3, sorted.length));
@@ -494,6 +525,8 @@
     $('pw-undo').onclick = doUndo;
     $('pw-bomb').onclick = enterBombMode;
     $('pw-shuffle').onclick = doShuffle;
+    const sb = $('sound-btn');
+    if (sb && window.GameAudio) GameAudio.attachButton(sb);
   }
 
   // ===== Запуск =====

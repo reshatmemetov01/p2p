@@ -97,6 +97,7 @@
       current.width = Math.min(INIT_W, current.width + 6);
       place(current.left, current.width, current.hue);
       burst(top.left + top.width / 2, LINE, current.hue);
+      if (window.GameAudio) { GameAudio.sfx('perfect'); GameAudio.shake(canvas); }
     } else {
       combo = 0;
       const nl = Math.max(current.left, top.left);
@@ -112,6 +113,7 @@
       if (current.left < nl) falling.push(fallPiece(current.left, nl - current.left, current.hue, -2));
       if (current.left + current.width > nr) falling.push(fallPiece(nr, current.left + current.width - nr, current.hue, 2));
       place(nl, ov, current.hue);
+      if (window.GameAudio) GameAudio.sfx('place', score);
     }
 
     score++;
@@ -138,6 +140,7 @@
 
   function gameOver() {
     mode = 'over';
+    if (window.GameAudio) GameAudio.sfx('fail');
     $('final-score').textContent = score;
     $('over').classList.remove('hidden');
     $('tap-hint').classList.add('hidden');
@@ -148,6 +151,7 @@
   // Продолжить за рекламу: вернуть блок и играть дальше
   function continueGame() {
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       const top = blocks[blocks.length - 1];
       if (top.width < 40) top.width = 40; // чуть расширим, если совсем узко
       falling = [];
@@ -289,6 +293,8 @@
     $('btn-start').onclick = startGame;
     $('btn-restart').onclick = () => startGame();
     $('btn-continue').onclick = continueGame;
+    const sb = $('sound-btn');
+    if (sb && window.GameAudio) GameAudio.attachButton(sb);
 
     // Тестовый API
     window.__tower = {

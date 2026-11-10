@@ -66,4 +66,9 @@ html, body {
 }
 @keyframes pulse { 0%,100%{opacity:.5;} 50%{opacity:1;} }
 
+#sound-btn {
+  position: absolute; z-index: 6;
+  top: calc(16px + env(safe-area-inset-top)); right: 16px;
+}
+
 .hidden { display: none !important; }

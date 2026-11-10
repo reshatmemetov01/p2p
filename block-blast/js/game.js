@@ -290,6 +290,7 @@
     addScore(piece.cells.length);
     pieces[idx] = null;
     renderBoard();
+    if (window.GameAudio) GameAudio.sfx('place');
 
     clearLines(() => {
       if (pieces.every((p) => !p)) dealPieces();
@@ -329,6 +330,10 @@
     let gained = toClear.size * 10 + (lines - 1) * 50;
     if (streak > 1) gained += streak * 20;
     addScore(gained);
+    if (window.GameAudio) {
+      GameAudio.sfx(lines >= 2 || streak >= 2 ? 'perfect' : 'clear');
+      GameAudio.shake(boardEl);
+    }
     if (lines >= 2 || streak >= 2) showCombo(lines, streak, gained);
 
     setTimeout(() => {
@@ -369,6 +374,7 @@
   function doRefresh() {
     if (busy) return;
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       dealPieces();
       if (!anyMoveLeft()) setTimeout(showOverlay, 250);
     });
@@ -382,6 +388,7 @@
       for (let c = 0; c < GRID; c++) if (board[r][c]) { hasBlocks = true; break; }
     if (!hasBlocks) return;
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       hammerMode = true;
       boardEl.parentElement.classList.add('hammer-on');
       boardEl.classList.add('hammer-on');
@@ -394,6 +401,7 @@
     if (board[r][c]) {
       board[r][c] = null;
       renderBoard();
+      if (window.GameAudio) GameAudio.sfx('clear');
       exitHammer();
       // после разбивки могли появиться ходы — перепроверим game over
       if (!anyMoveLeft()) setTimeout(showOverlay, 200);
@@ -409,6 +417,7 @@
 
   // ===== Конец игры =====
   function showOverlay() {
+    if (window.GameAudio) GameAudio.sfx('fail');
     $('overlay-sub').textContent = 'Счёт: ' + score;
     overlay.classList.remove('hidden');
   }
@@ -416,6 +425,7 @@
 
   function continueAfterAd() {
     window.YSDK.showRewarded(() => {
+      if (window.GameAudio) GameAudio.sfx('power');
       // Освобождаем нижние 3 ряда
       for (let r = GRID - 3; r < GRID; r++)
         for (let c = 0; c < GRID; c++) board[r][c] = null;
@@ -450,6 +460,8 @@
     $('btn-continue').onclick = continueAfterAd;
     $('pw-refresh').onclick = doRefresh;
     $('pw-hammer').onclick = enterHammer;
+    const sb = $('sound-btn');
+    if (sb && window.GameAudio) GameAudio.attachButton(sb);
   }
 
   // ===== Тестовый API (для автотестов) =====

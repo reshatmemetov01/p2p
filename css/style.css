@@ -53,7 +53,7 @@ html, body {
 .score-value { font-size: 22px; font-weight: 800; }
 
 /* Toolbar */
-.toolbar { display: flex; justify-content: flex-end; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; }
 .btn {
   border: none; cursor: pointer; font-weight: 700; color: var(--text);
   border-radius: 10px; padding: 10px 18px; font-size: 15px;
