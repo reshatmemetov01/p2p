@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Башня</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <!-- Верхний счёт -->
+    <div class="hud">
+      <div class="score" id="score">0</div>
+      <div class="best">Рекорд: <span id="best">0</span></div>
+    </div>
+
+    <!-- Старт -->
+    <div id="start" class="screen">
+      <div class="screen-card">
+        <div class="big-emoji">🏗️</div>
+        <h1>БАШНЯ</h1>
+        <p>Нажимай в такт — ставь блоки один на другой. Что не совпало — отвалится. Строй как можно выше!</p>
+        <button class="btn btn-main" id="btn-start">Играть</button>
+      </div>
+    </div>
+
+    <!-- Конец -->
+    <div id="over" class="screen hidden">
+      <div class="screen-card">
+        <div class="big-emoji">🏢</div>
+        <h1>Башня упала!</h1>
+        <div class="final">Высота: <b id="final-score">0</b></div>
+        <button class="btn btn-reward" id="btn-continue"><span class="reward-ico">▶</span> Продолжить за рекламу</button>
+        <button class="btn btn-main" id="btn-restart">Заново</button>
+      </div>
+    </div>
+
+    <div class="tap-hint" id="tap-hint">Нажми, чтобы поставить блок</div>
+  </div>
+
+  <script src="https://yandex.ru/games/sdk/v2?v=2"></script>
+  <script src="js/yandex-sdk.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
