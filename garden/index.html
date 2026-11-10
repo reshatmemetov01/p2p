@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Грядки</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="title"><h1>🌱 ГРЯДКИ</h1></div>
+      <div class="coins-box">
+        <span class="coin-ico">🪙</span>
+        <span class="coins" id="coins">0</span>
+      </div>
+    </header>
+
+    <div id="x2-banner" class="x2-banner hidden">⚡ x2 монеты: <span id="x2-time">60</span>с</div>
+
+    <div id="garden" class="garden"></div>
+
+    <button class="btn btn-harvest" id="btn-harvest">🧺 Собрать всё</button>
+
+    <div class="shop" id="shop"></div>
+
+    <div class="powerbar">
+      <button class="power" id="pw-x2">
+        <span class="pw-ico">💰</span><span class="pw-name">x2 на 60с</span>
+      </button>
+      <button class="power" id="pw-water">
+        <span class="pw-ico">⚡</span><span class="pw-name">Полить всё</span>
+      </button>
+      <button class="power" id="pw-gift">
+        <span class="pw-ico">🎁</span><span class="pw-name">Бонус</span>
+      </button>
+    </div>
+
+    <p class="hint" id="hint">Выбери семя в магазине и нажми на грядку</p>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://yandex.ru/games/sdk/v2?v=2"></script>
+  <script src="js/yandex-sdk.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
