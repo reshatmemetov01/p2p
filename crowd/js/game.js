@@ -254,17 +254,42 @@
     }
   }
   function scaledAdd(d) { return Math.max(4, Math.round((6 + d * 0.03) * (0.6 + Math.random() * 0.9))); }
-  function makeGate(d, forceGood) {
+  // Зелёные (выгодные) воротца
+  function greenOp(d) {
     const r = Math.random();
-    if (forceGood || r < 0.55) { if (r < 0.18) return { op: 'mul', val: Math.random() < 0.3 ? 3 : 2, good: true }; return { op: 'add', val: scaledAdd(d), good: true }; }
-    if (r < 0.8) return { op: 'sub', val: scaledAdd(d), good: false };
-    return { op: 'div', val: 2, good: false };
+    if (r < 0.22) return { op: 'mul', val: 2, good: true };
+    if (r < 0.34) return { op: 'mul', val: 3, good: true };
+    return { op: 'add', val: scaledAdd(d), good: true };
+  }
+  // Красные (вредные/хитрые) воротца
+  function redOp(d, allowZero) {
+    const r = Math.random();
+    if (allowZero && r < 0.13) return { op: 'mul', val: 0, good: false };  // ×0 — убивает толпу!
+    if (r < 0.32) return { op: 'mul', val: 1, good: false };               // ×1 — ловушка (ничего)
+    if (r < 0.64) return { op: 'sub', val: scaledAdd(d), good: false };    // −N
+    if (r < 0.86) return { op: 'div', val: 2, good: false };               // ÷2
+    return { op: 'div', val: 3, good: false };                            // ÷3
+  }
+  function sameOp(a, b) { return a.op === b.op && a.val === b.val; }
+  function makeGatePair(d) {
+    let left, right;
+    if (Math.random() < 0.68) {
+      // один зелёный + один красный (классика, но без двух зелёных)
+      const g = greenOp(d), b = redOp(d, true);
+      if (Math.random() < 0.5) { left = g; right = b; } else { left = b; right = g; }
+    } else {
+      // два красных — выбираешь меньшее зло (×1 vs ÷2 и т.п.)
+      left = redOp(d, false); right = redOp(d, true);
+      let guard = 0;
+      while ((sameOp(left, right) || (left.val === 0 && right.val === 0)) && guard++ < 8) right = redOp(d, false);
+    }
+    return { left, right };
   }
   function gateText(g) { return (g.op === 'add' ? '+' : g.op === 'sub' ? '−' : g.op === 'mul' ? '×' : '÷') + g.val; }
 
   function spawnGate(d) {
-    let left = makeGate(d, false), right = makeGate(d, false);
-    if (!left.good && !right.good) { if (Math.random() < 0.5) left = makeGate(d, true); else right = makeGate(d, true); }
+    const pair = makeGatePair(d);
+    const left = pair.left, right = pair.right;
     const tex = gateTexture(left, right);
     const mat = new T.MeshBasicMaterial({ map: tex, transparent: true, side: T.DoubleSide });
     const mesh = new T.Mesh(new T.PlaneGeometry(ROAD_W, 2.1), mat);
