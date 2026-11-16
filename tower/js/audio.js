@@ -68,6 +68,15 @@
       this.updateBtn();
     },
 
+    // Временно приглушить на время рекламы (не меняя выбор игрока)
+    platformMute(muted) {
+      if (!this.ctx) return;
+      try {
+        if (muted) this.ctx.suspend();
+        else if (this.on && this.ctx.state === 'suspended') this.ctx.resume();
+      } catch (e) {}
+    },
+
     // ---- Эффекты ----
     tone(freq, start, dur, type, vol, dest) {
       if (!this.ctx) return;

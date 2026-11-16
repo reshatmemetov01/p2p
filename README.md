@@ -9,9 +9,16 @@
 | **Блок Бласт** | `block-blast/` | Блоки 8×8 (Block Blast) |
 | **Башня** | `tower/` | Stack-башня (по мотивам ASMR Tower из Roblox) |
 
-Все на чистом JavaScript, лёгкие (~30 КБ), с подключённым Yandex Games SDK и
-монетизацией через рекламу. Монетизация, SDK и способы заработка у них одинаковые
-(см. ниже).
+Все на чистом JavaScript, лёгкие (~30 КБ), с мультиплатформенным
+**Playgama Bridge** — одна сборка работает на Playgama, CrazyGames,
+GameDistribution, Poki, VK, Telegram, Y8, Яндекс Играх и других площадках.
+Монетизация через рекламу (interstitial + rewarded) у всех одинаковая (см. ниже).
+
+> Bridge подключается строкой `https://bridge.playgama.com/v2/stable/playgama-bridge.js`
+> и сам определяет площадку. Рядом с `index.html` лежит `playgama-bridge-config.json` —
+> перед заливкой на конкретную площадку сгенерируй финальный конфиг в редакторе
+> <https://playgama.github.io/bridge-config-editor/> (там добавляются ID площадки).
+> Обёртка — `js/bridge-sdk.js`.
 
 Во всех играх есть **фоновая музыка и звуки** (генерируются через Web Audio API —
 без аудиофайлов, ничего не весит) и **переключатель звука** 🔊/🔇 с сохранением
