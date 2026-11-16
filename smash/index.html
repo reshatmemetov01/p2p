@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Крушитель</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <button class="sound-btn" id="sound-btn" title="Звук">🔊</button>
+
+    <!-- HUD -->
+    <div class="hud">
+      <div class="hud-item">🏁 <span id="dist">0</span> м</div>
+      <div class="hud-item">🪙 <span id="coins">0</span></div>
+      <div class="hud-item" id="boost-hud">🚀 <span id="boosts">0</span></div>
+    </div>
+
+    <div class="tap-hint" id="tap-hint"></div>
+
+    <!-- Старт -->
+    <div id="start" class="screen">
+      <div class="screen-card">
+        <div class="big-emoji">💥</div>
+        <h1>КРУШИТЕЛЬ</h1>
+        <p>Запусти куклу из катапульты, лети как можно дальше и круши всё на пути! Собирай монеты и прокачивайся.</p>
+        <button class="btn btn-main" id="btn-start">Запустить!</button>
+      </div>
+    </div>
+
+    <!-- Конец заезда -->
+    <div id="end" class="screen hidden">
+      <div class="screen-card">
+        <div class="big-emoji">🎯</div>
+        <h1>Отличный полёт!</h1>
+        <div class="stats">
+          <div>Дальность: <b id="end-dist">0</b> м</div>
+          <div>Монеты за заезд: <b id="end-coins">0</b> 🪙</div>
+        </div>
+        <button class="btn btn-reward" id="btn-x2"><span class="reward-ico">▶</span> Удвоить монеты за рекламу</button>
+        <button class="btn btn-main" id="btn-upgrades">🔧 Прокачка</button>
+        <button class="btn btn-ghost" id="btn-again">Ещё заезд</button>
+      </div>
+    </div>
+
+    <!-- Прокачка -->
+    <div id="shop" class="screen hidden">
+      <div class="screen-card wide">
+        <h1>🔧 Прокачка</h1>
+        <div class="balance">🪙 <span id="shop-coins">0</span></div>
+        <div class="upg" id="upg-power"></div>
+        <div class="upg" id="upg-bounce"></div>
+        <div class="upg" id="upg-boost"></div>
+        <button class="btn btn-main" id="btn-close-shop">Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/matter.min.js"></script>
+  <script src="js/bridge-sdk.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
