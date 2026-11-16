@@ -8,9 +8,10 @@
   const SAVE_KEY = 'crowd_save_v2';
   const SPRITE_CAP = 70;
 
-  // Перспектива
-  const D0 = 7;          // «фокус»: чем меньше, тем сильнее сужение
-  const VIS_Z = 34;      // сколько метров видно вперёд
+  // Перспектива (камера ниже и ближе — дорога шире, толпа крупнее)
+  const D0 = 11;         // «фокус»: больше = мягче сужение, дорога шире
+  const VIS_Z = 30;      // сколько метров видно вперёд
+  const MAX_LAT = 0.7;   // как далеко вбок может уйти толпа
 
   // ---- Состояние ----
   let W = 0, H = 0, horizonY = 0, crowdScreenY = 0, halfRoad = 0;
@@ -47,8 +48,8 @@
     W = window.innerWidth; H = window.innerHeight;
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    horizonY = H * 0.22; crowdScreenY = H * 0.78;
-    halfRoad = Math.min(W * 0.44, 300);
+    horizonY = H * 0.34; crowdScreenY = H * 0.84;
+    halfRoad = W * 0.5;
   }
 
   // Формация человечков (подсолнух, в боковом смещении и глубине)
@@ -132,7 +133,7 @@
       traveled += speed * dt;
       dist = Math.floor(traveled);
       lat += (targetLat - lat) * Math.min(1, dt * 12);
-      lat = Math.max(-0.82, Math.min(0.82, lat));
+      lat = Math.max(-MAX_LAT, Math.min(MAX_LAT, lat));
       generateUpTo(traveled + VIS_Z + 5);
       processObjects();
       updateHUD();
@@ -202,17 +203,26 @@
 
   // ===== Рендер =====
   function render() {
-    // фон (ледяной)
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#bfe3f5'); g.addColorStop(0.45, '#8fc4e6'); g.addColorStop(1, '#6aa8d6');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    // дальние холмы
-    ctx.fillStyle = '#9fcbe8'; ctx.fillRect(0, horizonY - 16, W, 16);
+    // небо
+    const sky = ctx.createLinearGradient(0, 0, 0, horizonY + 10);
+    sky.addColorStop(0, '#cdeafb'); sky.addColorStop(1, '#a8d4ef');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, horizonY + 10);
+    // горы по бокам (два слоя)
+    drawMountains(horizonY + 6, H * 0.17, '#bcdcf0', 0.7);
+    drawMountains(horizonY + 8, H * 0.12, '#a6cde7', 2.3);
+    // снежная земля ниже горизонта
+    const gr = ctx.createLinearGradient(0, horizonY, 0, H);
+    gr.addColorStop(0, '#dfeef7'); gr.addColorStop(1, '#c6def0');
+    ctx.fillStyle = gr; ctx.fillRect(0, horizonY, W, H - horizonY);
 
-    // дорога (трапеция в перспективе)
-    const bl = proj(-1, 0), br = proj(1, 0), tl = proj(-1, VIS_Z), tr = proj(1, VIS_Z);
+    // дорога (трапеция до самого горизонта — сходится к горам)
+    const bl = proj(-1, 0), br = proj(1, 0);
+    const topHalf = halfRoad * 0.07, topY = horizonY + 2;
     ctx.fillStyle = '#eef3f7';
-    ctx.beginPath(); ctx.moveTo(bl.x, bl.y); ctx.lineTo(br.x, br.y); ctx.lineTo(tr.x, tr.y); ctx.lineTo(tl.x, tl.y); ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(bl.x, bl.y); ctx.lineTo(br.x, br.y);
+    ctx.lineTo(W / 2 + topHalf, topY); ctx.lineTo(W / 2 - topHalf, topY);
+    ctx.closePath(); ctx.fill();
     // поперечные полосы (бегут)
     const off = traveled % 4;
     for (let z = VIS_Z - (off); z > 0; z -= 4) {
@@ -282,34 +292,60 @@
     ctx.textBaseline = 'alphabetic';
   }
 
+  function drawMountains(baseY, maxH, color, seed) {
+    const n = 6, step = W / n;
+    for (let i = -1; i <= n; i++) {
+      const cx = i * step + step / 2;
+      const h = maxH * (0.5 + 0.5 * Math.abs(Math.sin(i * 2.1 + seed)));
+      const w = step * (0.95 + 0.4 * Math.abs(Math.cos(i * 1.7 + seed)));
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.moveTo(cx - w, baseY); ctx.lineTo(cx, baseY - h); ctx.lineTo(cx + w, baseY); ctx.closePath(); ctx.fill();
+      // снежная шапка
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.moveTo(cx - w * 0.33, baseY - h * 0.62); ctx.lineTo(cx, baseY - h); ctx.lineTo(cx + w * 0.33, baseY - h * 0.62); ctx.closePath(); ctx.fill();
+    }
+  }
+
   function drawCrowd() {
     const hl = crowdHalfLat() / 0.42; // 0..1 насколько толпа широкая
     for (let i = 0; i < sprites; i++) {
       const s = slots[i];
-      const bob = Math.sin(t * 9 + s.ph) * 0.04;
+      const bob = Math.sin(t * 9 + s.ph) * 2;
       const p = proj(lat + s.lat * (0.5 + hl), s.z);
-      drawPerson(p.x, p.y + bob * p.sc * 40, p.sc);
+      drawPerson(p.x, p.y + bob * p.sc, p.sc, s.ph);
     }
     // пузырь с числом над толпой (над дальними человечками)
     const far = proj(lat, 2.9);
-    drawBubble(far.x, far.y - 48 * far.sc, Math.max(0, N));
+    drawBubble(far.x, far.y - 56 * far.sc, Math.max(0, N));
   }
 
-  function drawPerson(x, y, sc) {
-    const bw = 24 * sc, bh = 40 * sc, hr = 12 * sc;
-    ctx.fillStyle = 'rgba(0,0,0,0.16)';
-    ctx.beginPath(); ctx.ellipse(x, y + 2, bw * 0.55, bw * 0.22, 0, 0, 6.3); ctx.fill();
-    // тело-капсула с градиентом
+  function drawPerson(x, y, sc, ph) {
+    const legSw = Math.sin(t * 14 + ph) * 5 * sc;
+    const armSw = Math.sin(t * 14 + ph + Math.PI) * 4 * sc;
+    const bw = 16 * sc, bh = 20 * sc, hr = 8.5 * sc;
+    const hipY = y - 11 * sc, topY = hipY - bh;
+    // тень
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(x, y + 1, bw * 0.62, bw * 0.24, 0, 0, 6.3); ctx.fill();
+    ctx.lineCap = 'round';
+    // ноги
+    ctx.strokeStyle = '#2766b8'; ctx.lineWidth = 5.5 * sc;
+    ctx.beginPath(); ctx.moveTo(x - 3 * sc, hipY); ctx.lineTo(x - 3 * sc - legSw, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + 3 * sc, hipY); ctx.lineTo(x + 3 * sc + legSw, y); ctx.stroke();
+    // тело
     const grd = ctx.createLinearGradient(x - bw / 2, 0, x + bw / 2, 0);
     grd.addColorStop(0, '#6bb8ff'); grd.addColorStop(1, '#2e86de');
-    ctx.fillStyle = grd;
-    rr(x - bw / 2, y - bh, bw, bh, bw / 2); ctx.fill();
+    ctx.fillStyle = grd; rr(x - bw / 2, topY, bw, bh, bw / 2); ctx.fill();
+    // руки
+    ctx.strokeStyle = '#3f93ea'; ctx.lineWidth = 4.5 * sc;
+    ctx.beginPath(); ctx.moveTo(x - bw / 2 + 1 * sc, topY + 4 * sc); ctx.lineTo(x - bw / 2 - 2 * sc + armSw, topY + bh * 0.85); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + bw / 2 - 1 * sc, topY + 4 * sc); ctx.lineTo(x + bw / 2 + 2 * sc - armSw, topY + bh * 0.85); ctx.stroke();
     // голова
     ctx.fillStyle = '#58a9f0';
-    ctx.beginPath(); ctx.arc(x, y - bh - hr * 0.3, hr, 0, 6.3); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, topY - hr * 0.5, hr, 0, 6.3); ctx.fill();
     // блик
-    ctx.fillStyle = 'rgba(255,255,255,0.3)';
-    ctx.beginPath(); ctx.arc(x - hr * 0.35, y - bh - hr * 0.6, hr * 0.42, 0, 6.3); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath(); ctx.arc(x - hr * 0.32, topY - hr * 0.8, hr * 0.4, 0, 6.3); ctx.fill();
   }
 
   function drawBubble(x, y, num) {
@@ -383,7 +419,7 @@
 
   // ===== Ввод =====
   function bindInput() {
-    const toLat = (e) => { const r = canvas.getBoundingClientRect(); return Math.max(-0.82, Math.min(0.82, ((e.clientX - r.left) - W / 2) / halfRoad)); };
+    const toLat = (e) => { const r = canvas.getBoundingClientRect(); return Math.max(-MAX_LAT, Math.min(MAX_LAT, ((e.clientX - r.left) - W / 2) / halfRoad)); };
     let dragging = false;
     canvas.addEventListener('pointerdown', (e) => { if (mode === 'play') { dragging = true; targetLat = toLat(e); } });
     canvas.addEventListener('pointermove', (e) => { if (dragging) targetLat = toLat(e); });
@@ -401,7 +437,7 @@
     if (sb && window.GameAudio) GameAudio.attachButton(sb);
 
     window.__crowd = {
-      start: startRun, steerTo: (x) => { targetLat = Math.max(-0.82, Math.min(0.82, (x - W / 2) / halfRoad)); },
+      start: startRun, steerTo: (x) => { targetLat = Math.max(-MAX_LAT, Math.min(MAX_LAT, (x - W / 2) / halfRoad)); },
       state: () => ({ mode, N, dist, coins, runCoins }),
       addCoins: (n) => { coins += n; save(); updateHUD(); },
       forceOver: () => { N = 0; },
