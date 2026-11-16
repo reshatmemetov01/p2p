@@ -17,7 +17,9 @@
   let scene, camera, renderer;
   let parts = {};            // InstancedMesh по частям тела (torso/head/legL/...)
   let countSprite, lastShownN = -1;
-  const _m = new T.Matrix4(), _r = new T.Matrix4();
+  let burstMesh, burstData = [];   // «разлёт»: летящие кусочки
+  let shake = 0;                   // тряска камеры
+  const _m = new T.Matrix4(), _r = new T.Matrix4(), _s = new T.Vector3();
   let W = 0, H = 0;
 
   let mode = 'ready';
@@ -92,8 +94,8 @@
     W = window.innerWidth; H = window.innerHeight;
     renderer.setPixelRatio(dpr); renderer.setSize(W, H, false);
     camera.aspect = W / H; camera.updateProjectionMatrix();
-    camera.position.set(0, 3.5, -5.0);
-    camera.lookAt(0, 0.7, 7.5);
+    camera.position.set(CAM.x, CAM.y, CAM.z);
+    camera.lookAt(CAM.tx, CAM.ty, CAM.tz);
   }
 
   // ===== Статичный мир (дорога, земля, горы) =====
@@ -137,15 +139,20 @@
       slots.push({ x: Math.cos(a) * r * 0.2, z: Math.sin(a) * r * 0.2, ph: Math.random() * 6.3 });
     }
   }
+  // Длины конечностей (совпадают с геометрией; pivot сверху в начале координат)
+  const ARM_LEN = 0.34, LEG_LEN = 0.46;
+  const CAM = { x: 0, y: 3.5, z: -5.0, tx: 0, ty: 0.7, tz: 7.5 };
   function buildCrowd() {
-    const BLUE = 0x2e86de, LITE = 0x74b4f2, DARK = 0x234f87, SKIN = 0x234f87;
-    // Геометрии. Торс/голова — со смещением (центр на месте). Конечности —
-    // поворачиваются вокруг верхней точки (pivot в начале координат).
-    const torsoGeo = new T.BoxGeometry(0.26, 0.42, 0.18, 1, 1, 1); torsoGeo.translate(0, 0.56, 0);
-    const headGeo = new T.SphereGeometry(0.16, 10, 8); headGeo.translate(0, 0.92, 0);
-    const legGeo = new T.CylinderGeometry(0.07, 0.055, 0.38, 6); legGeo.translate(0, -0.19, 0);
-    const armGeo = new T.CylinderGeometry(0.055, 0.045, 0.32, 6); armGeo.translate(0, -0.16, 0);
-    const shadowGeo = new T.CircleGeometry(0.22, 10); shadowGeo.rotateX(-Math.PI / 2);
+    const BLUE = 0x1f6fe0;
+    // Голова, шея, торс — смещены (стоят на месте). Конечности — крутятся вокруг верхней точки.
+    const headGeo = new T.SphereGeometry(0.2, 14, 12); headGeo.translate(0, 1.0, 0);
+    const neckGeo = new T.CylinderGeometry(0.06, 0.06, 0.14, 6); neckGeo.translate(0, 0.8, 0);
+    const torsoGeo = new T.CylinderGeometry(0.085, 0.12, 0.42, 8); torsoGeo.translate(0, 0.55, 0);
+    const armGeo = new T.CylinderGeometry(0.05, 0.045, ARM_LEN, 6); armGeo.translate(0, -ARM_LEN / 2, 0);
+    const legGeo = new T.CylinderGeometry(0.06, 0.05, LEG_LEN, 6); legGeo.translate(0, -LEG_LEN / 2, 0);
+    const handGeo = new T.SphereGeometry(0.075, 8, 6);
+    const footGeo = new T.SphereGeometry(0.09, 8, 6); footGeo.scale(1, 0.7, 1.4);
+    const shadowGeo = new T.CircleGeometry(0.24, 12); shadowGeo.rotateX(-Math.PI / 2);
 
     const im = (geo, color, opts) => {
       const mat = new T.MeshLambertMaterial(Object.assign({ color }, opts || {}));
@@ -153,17 +160,51 @@
       m.instanceMatrix.setUsage(T.DynamicDrawUsage);
       m.frustumCulled = false; scene.add(m); return m;
     };
-    parts.shadow = im(shadowGeo, 0x204060, { transparent: true, opacity: 0.18 });
-    parts.legL = im(legGeo, DARK);
-    parts.legR = im(legGeo, DARK);
+    parts.shadow = im(shadowGeo, 0x183a66, { transparent: true, opacity: 0.2 });
+    parts.legL = im(legGeo, BLUE); parts.legR = im(legGeo, BLUE);
+    parts.footL = im(footGeo, BLUE); parts.footR = im(footGeo, BLUE);
     parts.torso = im(torsoGeo, BLUE);
-    parts.armL = im(armGeo, BLUE);
-    parts.armR = im(armGeo, BLUE);
-    parts.head = im(headGeo, LITE);
+    parts.armL = im(armGeo, BLUE); parts.armR = im(armGeo, BLUE);
+    parts.handL = im(handGeo, BLUE); parts.handR = im(handGeo, BLUE);
+    parts.neck = im(neckGeo, BLUE);
+    parts.head = im(headGeo, BLUE);
+
+    // «Разлёт» — пул летящих шариков
+    burstMesh = new T.InstancedMesh(new T.SphereGeometry(0.16, 8, 6), new T.MeshLambertMaterial({ color: BLUE }), 160);
+    burstMesh.instanceMatrix.setUsage(T.DynamicDrawUsage); burstMesh.frustumCulled = false; scene.add(burstMesh);
+    for (let i = 0; i < 160; i++) burstData.push({ life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
 
     // Пузырь с числом над толпой
     countSprite = new T.Sprite(new T.SpriteMaterial({ map: countTex(10), depthTest: false, transparent: true }));
     countSprite.scale.set(1.3, 0.66, 1); countSprite.renderOrder = 10; scene.add(countSprite);
+  }
+
+  // ===== Разлёт =====
+  function spawnBurst(count) {
+    let spawned = 0;
+    for (let i = 0; i < burstData.length && spawned < count; i++) {
+      const b = burstData[i]; if (b.life > 0) continue;
+      const a = Math.random() * 6.28, sp = 2 + Math.random() * 3;
+      b.life = 0.7 + Math.random() * 0.4;
+      b.x = crowdX + (Math.random() - 0.5) * 1.2; b.y = 0.5 + Math.random() * 0.5; b.z = (Math.random() - 0.5) * 1.2;
+      b.vx = Math.cos(a) * sp; b.vz = Math.sin(a) * sp; b.vy = 4 + Math.random() * 3;
+      spawned++;
+    }
+    shake = Math.min(0.5, shake + 0.25);
+  }
+  function updateBurst(dt) {
+    if (!burstMesh) return;
+    let n = 0;
+    for (const b of burstData) {
+      if (b.life <= 0) continue;
+      b.life -= dt; b.vy -= 14 * dt;
+      b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+      if (b.y < 0.1) { b.y = 0.1; b.vy *= -0.4; b.vx *= 0.7; b.vz *= 0.7; }
+      const sc = Math.max(0.01, Math.min(1, b.life * 1.6));
+      _m.makeScale(sc, sc, sc); _m.setPosition(b.x, b.y, b.z);
+      burstMesh.setMatrixAt(n++, _m);
+    }
+    burstMesh.count = n; burstMesh.instanceMatrix.needsUpdate = true;
   }
 
   function countTex(n) {
@@ -267,6 +308,9 @@
     const now = performance.now();
     const dt = loop._l ? Math.min((now - loop._l) / 1000, 0.05) : 0; loop._l = now; t += dt;
     update(dt);
+    // тряска камеры
+    if (shake > 0) { camera.position.x = CAM.x + (Math.random() - 0.5) * shake; camera.position.y = CAM.y + (Math.random() - 0.5) * shake; }
+    else if (camera.position.x !== CAM.x) { camera.position.x = CAM.x; camera.position.y = CAM.y; }
     renderer.render(scene, camera);
   }
 
@@ -281,15 +325,21 @@
       updateHUD();
       if (N <= 0) gameOver();
     }
+    if (shake > 0) shake = Math.max(0, shake - dt * 1.6);
     // бег полос
     if (roadMat && roadMat._tex) roadMat._tex.offset.y = -traveled * 0.25;
     // позиции объектов
     for (const o of objects) o.obj.position.z = o.worldZ - traveled;
     updateCrowd(dt);
+    updateBurst(dt);
   }
 
   function crowdWidth() { return Math.min(2.6, 0.5 + Math.sqrt(Math.min(N, CAP)) * 0.12); }
 
+  function ballAt(mesh, i, px, py, pz, len, swing) {
+    _m.makeTranslation(px, py - len * Math.cos(swing), pz - len * Math.sin(swing));
+    mesh.setMatrixAt(i, _m);
+  }
   function updateCrowd(dt) {
     const want = Math.max(0, Math.min(N, CAP));
     const spread = crowdWidth();
@@ -299,18 +349,21 @@
       const run = running ? (t * 13 + s.ph) : s.ph;
       const bob = running ? Math.abs(Math.sin(run)) * 0.07 : 0;
       const px = crowdX + s.x * spread, pz = s.z * spread, py = bob;
-      const ls = running ? Math.sin(run) * 0.65 : 0;      // мах ногами
-      const as = running ? Math.sin(run) * 0.5 : 0;       // мах руками (в противофазе)
-      // тень на земле
+      const ls = running ? Math.sin(run) * 0.6 : 0;   // ноги
+      const as = running ? Math.sin(run) * 0.5 : 0;   // руки (противофаза)
+      // тень
       _m.makeTranslation(px, 0.02, pz); parts.shadow.setMatrixAt(i, _m);
-      // торс и голова (смещение уже в геометрии)
-      _m.makeTranslation(px, py, pz); parts.torso.setMatrixAt(i, _m); parts.head.setMatrixAt(i, _m);
-      // ноги (pivot — бедро)
-      setLimb(parts.legL, i, px - 0.08, py + 0.4, pz, ls);
-      setLimb(parts.legR, i, px + 0.08, py + 0.4, pz, -ls);
-      // руки (pivot — плечо, противофаза ногам)
-      setLimb(parts.armL, i, px - 0.17, py + 0.72, pz, -as);
-      setLimb(parts.armR, i, px + 0.17, py + 0.72, pz, as);
+      // торс / шея / голова (смещение в геометрии)
+      _m.makeTranslation(px, py, pz);
+      parts.torso.setMatrixAt(i, _m); parts.neck.setMatrixAt(i, _m); parts.head.setMatrixAt(i, _m);
+      // ноги + стопы (pivot — бедро)
+      const hy = py + LEG_LEN;
+      setLimb(parts.legL, i, px - 0.07, hy, pz, ls); setLimb(parts.legR, i, px + 0.07, hy, pz, -ls);
+      ballAt(parts.footL, i, px - 0.07, hy, pz, LEG_LEN, ls); ballAt(parts.footR, i, px + 0.07, hy, pz, LEG_LEN, -ls);
+      // руки + кисти (pivot — плечо)
+      const sy = py + 0.74;
+      setLimb(parts.armL, i, px - 0.12, sy, pz, -as); setLimb(parts.armR, i, px + 0.12, sy, pz, as);
+      ballAt(parts.handL, i, px - 0.12, sy, pz, ARM_LEN, -as); ballAt(parts.handR, i, px + 0.12, sy, pz, ARM_LEN, as);
     }
     for (const k in parts) { parts[k].count = want; parts[k].instanceMatrix.needsUpdate = true; }
 
@@ -334,10 +387,10 @@
       if (o.type === 'gate') applyGate(lat < 0 ? o.left : o.right);
       else if (o.type === 'obst') {
         if (Math.abs(crowdX - o.cx) < o.hw + crowdWidth() * 0.5) {
-          N = Math.max(0, N - o.dmg); if (window.GameAudio) GameAudio.sfx('fail');
+          N = Math.max(0, N - o.dmg); spawnBurst(Math.min(o.dmg, 24)); if (window.GameAudio) GameAudio.sfx('fail');
         }
       } else if (o.type === 'wall') {
-        N -= o.req; if (window.GameAudio) GameAudio.sfx('clear');
+        N -= o.req; spawnBurst(Math.min(o.req, 36)); if (window.GameAudio) GameAudio.sfx('clear');
         if (N > 0) runCoins += Math.max(1, Math.round(o.req / 2)); else N = 0;
       }
     }
@@ -352,6 +405,7 @@
 
   function gameOver() {
     if (mode === 'over') return; mode = 'over';
+    spawnBurst(40);
     const bonus = Math.round(dist / 8) * (1 + upg.income * 0.5);
     runCoins += Math.round(bonus); coins += runCoins;
     if (dist > bestDist) bestDist = dist; save();
@@ -420,6 +474,7 @@
       state: () => ({ mode, N, dist, coins, runCoins }),
       addCoins: (n) => { coins += n; save(); updateHUD(); },
       forceOver: () => { N = 0; },
+      burst: () => spawnBurst(30),
       webgl: () => !!(renderer && renderer.getContext()),
     };
   }
