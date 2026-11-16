@@ -15,8 +15,9 @@
 
   // ---- Состояние ----
   let scene, camera, renderer;
-  let bodies, heads;         // InstancedMesh толпы
-  const dummy = new T.Object3D();
+  let parts = {};            // InstancedMesh по частям тела (torso/head/legL/...)
+  let countSprite, lastShownN = -1;
+  const _m = new T.Matrix4(), _r = new T.Matrix4();
   let W = 0, H = 0;
 
   let mode = 'ready';
@@ -91,8 +92,8 @@
     W = window.innerWidth; H = window.innerHeight;
     renderer.setPixelRatio(dpr); renderer.setSize(W, H, false);
     camera.aspect = W / H; camera.updateProjectionMatrix();
-    camera.position.set(0, 3.9, -5.4);
-    camera.lookAt(0, 0.5, 8);
+    camera.position.set(0, 3.5, -5.0);
+    camera.lookAt(0, 0.7, 7.5);
   }
 
   // ===== Статичный мир (дорога, земля, горы) =====
@@ -137,15 +138,53 @@
     }
   }
   function buildCrowd() {
-    const bodyGeo = new T.CylinderGeometry(0.16, 0.19, 0.58, 8); bodyGeo.translate(0, 0.29, 0);
-    const headGeo = new T.SphereGeometry(0.17, 10, 8); headGeo.translate(0, 0.72, 0);
-    const bodyMat = new T.MeshLambertMaterial({ color: 0x2e86de });
-    const headMat = new T.MeshLambertMaterial({ color: 0x59a9f2 });
-    bodies = new T.InstancedMesh(bodyGeo, bodyMat, CAP);
-    heads = new T.InstancedMesh(headGeo, headMat, CAP);
-    bodies.instanceMatrix.setUsage(T.DynamicDrawUsage);
-    heads.instanceMatrix.setUsage(T.DynamicDrawUsage);
-    scene.add(bodies); scene.add(heads);
+    const BLUE = 0x2e86de, LITE = 0x74b4f2, DARK = 0x234f87, SKIN = 0x234f87;
+    // Геометрии. Торс/голова — со смещением (центр на месте). Конечности —
+    // поворачиваются вокруг верхней точки (pivot в начале координат).
+    const torsoGeo = new T.BoxGeometry(0.26, 0.42, 0.18, 1, 1, 1); torsoGeo.translate(0, 0.56, 0);
+    const headGeo = new T.SphereGeometry(0.16, 10, 8); headGeo.translate(0, 0.92, 0);
+    const legGeo = new T.CylinderGeometry(0.07, 0.055, 0.38, 6); legGeo.translate(0, -0.19, 0);
+    const armGeo = new T.CylinderGeometry(0.055, 0.045, 0.32, 6); armGeo.translate(0, -0.16, 0);
+    const shadowGeo = new T.CircleGeometry(0.22, 10); shadowGeo.rotateX(-Math.PI / 2);
+
+    const im = (geo, color, opts) => {
+      const mat = new T.MeshLambertMaterial(Object.assign({ color }, opts || {}));
+      const m = new T.InstancedMesh(geo, mat, CAP);
+      m.instanceMatrix.setUsage(T.DynamicDrawUsage);
+      m.frustumCulled = false; scene.add(m); return m;
+    };
+    parts.shadow = im(shadowGeo, 0x204060, { transparent: true, opacity: 0.18 });
+    parts.legL = im(legGeo, DARK);
+    parts.legR = im(legGeo, DARK);
+    parts.torso = im(torsoGeo, BLUE);
+    parts.armL = im(armGeo, BLUE);
+    parts.armR = im(armGeo, BLUE);
+    parts.head = im(headGeo, LITE);
+
+    // Пузырь с числом над толпой
+    countSprite = new T.Sprite(new T.SpriteMaterial({ map: countTex(10), depthTest: false, transparent: true }));
+    countSprite.scale.set(1.3, 0.66, 1); countSprite.renderOrder = 10; scene.add(countSprite);
+  }
+
+  function countTex(n) {
+    const c = document.createElement('canvas'); c.width = 160; c.height = 80;
+    const x = c.getContext('2d');
+    x.fillStyle = '#2e86de'; roundRect(x, 6, 6, 148, 56, 16); x.fill();
+    x.beginPath(); x.moveTo(72, 62); x.lineTo(88, 62); x.lineTo(80, 76); x.closePath(); x.fill();
+    x.fillStyle = '#fff'; x.font = '900 42px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(String(n), 80, 32);
+    const tex = new T.CanvasTexture(c); return tex;
+  }
+  function roundRect(x, X, Y, w, h, r) {
+    x.beginPath(); x.moveTo(X + r, Y);
+    x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r);
+    x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath();
+  }
+
+  function setLimb(mesh, i, x, y, z, swing) {
+    _r.makeRotationX(swing);
+    _m.makeTranslation(x, y, z); _m.multiply(_r);
+    mesh.setMatrixAt(i, _m);
   }
 
   // ===== Старт =====
@@ -254,15 +293,38 @@
   function updateCrowd(dt) {
     const want = Math.max(0, Math.min(N, CAP));
     const spread = crowdWidth();
+    const running = mode === 'play';
     for (let i = 0; i < want; i++) {
       const s = slots[i];
-      const bob = Math.abs(Math.sin(t * 10 + s.ph)) * 0.18;
-      dummy.position.set(crowdX + s.x * spread, bob, s.z * spread);
-      dummy.rotation.y = 0; dummy.updateMatrix();
-      bodies.setMatrixAt(i, dummy.matrix); heads.setMatrixAt(i, dummy.matrix);
+      const run = running ? (t * 13 + s.ph) : s.ph;
+      const bob = running ? Math.abs(Math.sin(run)) * 0.07 : 0;
+      const px = crowdX + s.x * spread, pz = s.z * spread, py = bob;
+      const ls = running ? Math.sin(run) * 0.65 : 0;      // мах ногами
+      const as = running ? Math.sin(run) * 0.5 : 0;       // мах руками (в противофазе)
+      // тень на земле
+      _m.makeTranslation(px, 0.02, pz); parts.shadow.setMatrixAt(i, _m);
+      // торс и голова (смещение уже в геометрии)
+      _m.makeTranslation(px, py, pz); parts.torso.setMatrixAt(i, _m); parts.head.setMatrixAt(i, _m);
+      // ноги (pivot — бедро)
+      setLimb(parts.legL, i, px - 0.08, py + 0.4, pz, ls);
+      setLimb(parts.legR, i, px + 0.08, py + 0.4, pz, -ls);
+      // руки (pivot — плечо, противофаза ногам)
+      setLimb(parts.armL, i, px - 0.17, py + 0.72, pz, -as);
+      setLimb(parts.armR, i, px + 0.17, py + 0.72, pz, as);
     }
-    bodies.count = want; heads.count = want;
-    bodies.instanceMatrix.needsUpdate = true; heads.instanceMatrix.needsUpdate = true;
+    for (const k in parts) { parts[k].count = want; parts[k].instanceMatrix.needsUpdate = true; }
+
+    // пузырь с числом
+    if (countSprite) {
+      countSprite.visible = mode !== 'ready' && want > 0;
+      countSprite.position.set(crowdX, 1.7 + spread * 0.2, 0.3);
+      if (N !== lastShownN) {
+        lastShownN = N;
+        countSprite.material.map.dispose();
+        countSprite.material.map = countTex(Math.max(0, N));
+        countSprite.material.needsUpdate = true;
+      }
+    }
   }
 
   function processObjects() {
