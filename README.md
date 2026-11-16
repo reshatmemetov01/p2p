@@ -9,6 +9,7 @@
 | **Блок Бласт** | `block-blast/` | Блоки 8×8 (Block Blast) |
 | **Башня** | `tower/` | Stack-башня (по мотивам ASMR Tower из Roblox) |
 | **Крушитель** | `smash/` | Физическая крушилка с тряпичной куклой (Matter.js) |
+| **Толпа** | `crowd/` | Раннер с толпой (жанр Count Masters) |
 
 Все на чистом JavaScript, лёгкие (~30 КБ), с мультиплатформенным
 **Playgama Bridge** — одна сборка работает на Playgama, CrazyGames,
@@ -64,7 +65,7 @@ GameDistribution, Poki, VK, Telegram, Y8, Яндекс Играх и други�
 
 > Каждая игра загружается отдельно. Для **2048** архивируй файлы из корня
 > репозитория (`index.html`, `css/`, `js/`, `playgama-bridge-config.json`).
-> Для остальных — содержимое их папки: `block-blast/`, `tower/`, `smash/`
+> Для остальных — содержимое их папки: `block-blast/`, `tower/`, `smash/`, `crowd/`
 > (каждый раз `index.html` должен быть в корне архива).
 > У «Крушителя» в `js/` лежит ещё физический движок `matter.min.js` — включай его в архив.
 

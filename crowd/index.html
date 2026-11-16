@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Толпа</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <button class="sound-btn" id="sound-btn" title="Звук">🔊</button>
+
+    <div class="hud">
+      <div class="crowd-count" id="crowd">10</div>
+      <div class="dist">🏁 <span id="dist">0</span> м</div>
+      <div class="coins">🪙 <span id="coins">0</span></div>
+    </div>
+
+    <div class="tap-hint" id="tap-hint">Веди пальцем влево-вправо</div>
+
+    <div id="start" class="screen">
+      <div class="screen-card">
+        <div class="big-emoji">🏃‍♂️</div>
+        <h1>ТОЛПА</h1>
+        <p>Веди толпу! Проходи зелёные воротца, чтобы расти, избегай красных и ловушек. Пробивай стены и беги как можно дальше!</p>
+        <button class="btn btn-main" id="btn-start">В бой!</button>
+      </div>
+    </div>
+
+    <div id="end" class="screen hidden">
+      <div class="screen-card">
+        <div class="big-emoji">💀</div>
+        <h1>Толпа пала!</h1>
+        <div class="stats">
+          <div>Дистанция: <b id="end-dist">0</b> м</div>
+          <div>Монеты за забег: <b id="end-coins">0</b> 🪙</div>
+        </div>
+        <button class="btn btn-reward" id="btn-revive"><span class="reward-ico">▶</span> Продолжить за рекламу</button>
+        <button class="btn btn-reward" id="btn-x2"><span class="reward-ico">▶</span> Удвоить монеты</button>
+        <button class="btn btn-main" id="btn-upgrades">🔧 Прокачка</button>
+        <button class="btn btn-ghost" id="btn-again">Заново</button>
+      </div>
+    </div>
+
+    <div id="shop" class="screen hidden">
+      <div class="screen-card wide">
+        <h1>🔧 Прокачка</h1>
+        <div class="balance">🪙 <span id="shop-coins">0</span></div>
+        <div class="upg" id="upg-start"></div>
+        <div class="upg" id="upg-income"></div>
+        <button class="btn btn-main" id="btn-close-shop">Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/bridge-sdk.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
