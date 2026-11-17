@@ -18,6 +18,7 @@
   let parts = {}, eparts = {};     // синяя толпа игрока / красная вражеская
   let countSprite, ecountSprite, lastShownN = -1, eLastN = -1;
   let bluePool, redPool;           // «разлёт»: пулы летящих кусочков
+  let bulletMesh = null, bullets = []; // пули стрелков
   const enemyPlaced = new Set();
   let shake = 0;                   // тряска камеры
   const _m = new T.Matrix4(), _r = new T.Matrix4(), _s = new T.Vector3(), _cv = new T.Vector3();
@@ -176,6 +177,10 @@
     parts = buildCharSet(0x1f6fe0);   // синяя толпа (игрок)
     eparts = buildCharSet(0xe23b3b);  // красная толпа (враг)
     bluePool = makePool(0x1f6fe0); redPool = makePool(0xe23b3b);
+    // пули стрелков
+    bulletMesh = new T.InstancedMesh(new T.SphereGeometry(0.13, 6, 5), new T.MeshBasicMaterial({ color: 0xffd23b }), 70);
+    bulletMesh.frustumCulled = false; scene.add(bulletMesh);
+    bullets = []; for (let i = 0; i < 70; i++) bullets.push({ life: 0, x: 0, y: 0, z: 0 });
     countSprite = new T.Sprite(new T.SpriteMaterial({ map: countTex(10, '#2e86de'), depthTest: false, transparent: true }));
     countSprite.scale.set(1.3, 0.66, 1); countSprite.renderOrder = 10; scene.add(countSprite);
     ecountSprite = new T.Sprite(new T.SpriteMaterial({ map: countTex(10, '#e23b3b'), depthTest: false, transparent: true }));
@@ -241,6 +246,7 @@
     N = 10 + upg.start * 2; lat = 0; targetLat = 0; crowdX = 0; crowdZ = 0; crowdY = 0;
     traveled = 0; dist = 0; speed = 7; runCoins = 0;
     genDist = 10; wallPlaced.clear(); enemyPlaced.clear(); eLastN = -1;
+    for (const b of bullets) b.life = 0;
     mode = 'play';
     camera.position.set(CAM.x, CAM.y, CAM.z); camera.lookAt(CAM.tx, CAM.ty, CAM.tz);
     $('tap-hint').style.display = '';
@@ -252,19 +258,23 @@
   // ===== Генерация =====
   function generateUpTo(max) {
     while (genDist < max) {
-      const nw = Math.round(genDist / 80) * 80;            // стены: 80, 160, ...
-      const ne = Math.round((genDist - 40) / 80) * 80 + 40; // враги между: 40, 120, ...
-      if (nw > 0 && Math.abs(genDist - nw) < 9 && !wallPlaced.has(nw)) {
-        wallPlaced.add(nw); spawnWall(nw); genDist = nw + 18;
-      } else if (ne >= 40 && Math.abs(genDist - ne) < 9 && !enemyPlaced.has(ne)) {
-        enemyPlaced.add(ne); spawnEnemy(ne); genDist = ne + 18;
+      const ne = Math.round(genDist / 45) * 45; // «боевые» препятствия каждые ~45м
+      if (ne > 0 && Math.abs(genDist - ne) < 8 && !enemyPlaced.has(ne)) {
+        enemyPlaced.add(ne);
+        if ((ne / 45) % 2 === 0) spawnGunner(ne); else spawnEnemy(ne);
+        genDist = ne + 16;
       } else {
-        if (Math.random() < 0.7) spawnGate(genDist); else spawnObstacle(genDist);
+        const r = Math.random();
+        if (r < 0.48) spawnGate(genDist);
+        else if (r < 0.62) spawnObstacle(genDist);
+        else if (r < 0.80) spawnPit(genDist);
+        else spawnHammer(genDist);
         genDist += 9 + Math.random() * 6;
       }
     }
   }
   function spawnEnemy(d) { objects.push({ type: 'enemy', worldZ: d, count: Math.round(8 + d * 0.05) }); }
+  function spawnGunner(d) { objects.push({ type: 'gunner', worldZ: d, count: Math.round(5 + d * 0.035), fireT: 0 }); }
   function scaledAdd(d) { return Math.max(4, Math.round((6 + d * 0.03) * (0.6 + Math.random() * 0.9))); }
   // Зелёные (выгодные) воротца
   function greenOp(d) {
@@ -322,14 +332,27 @@
     scene.add(mesh);
     objects.push({ type: 'obst', worldZ: d, cx, hw, dmg: Math.round(8 + d * 0.02), obj: mesh, mat });
   }
-  function spawnWall(d) {
-    const req = Math.round(15 + d * 0.07);
-    const tex = numTexture('🧱 ' + req, '#8a5a3a', '#ffffff');
-    const front = new T.MeshBasicMaterial({ map: tex });
-    const side = new T.MeshLambertMaterial({ color: 0x6e4428 });
-    const mesh = new T.Mesh(new T.BoxGeometry(ROAD_W, 2.2, 0.7), [side, side, side, side, front, side]);
-    mesh.position.set(0, 1.1, 0); scene.add(mesh);
-    objects.push({ type: 'wall', worldZ: d, req, obj: mesh, tex, mat: front });
+  function spawnPit(d) {
+    const side = Math.random() < 0.5 ? -1 : 1, hw = 1.35;
+    const cx = side * (ROAD_HALF - hw + 0.5);
+    const g = new T.Group();
+    const hole = new T.Mesh(new T.BoxGeometry(hw * 2, 0.7, 2.4), new T.MeshBasicMaterial({ color: 0x131026 }));
+    hole.position.set(cx, -0.36, 0); g.add(hole);
+    const rim = new T.Mesh(new T.PlaneGeometry(hw * 2 + 0.12, 2.5), new T.MeshBasicMaterial({ color: 0x0c0a1a }));
+    rim.rotation.x = -Math.PI / 2; rim.position.set(cx, 0.02, 0); g.add(rim);
+    scene.add(g);
+    objects.push({ type: 'pit', worldZ: d, cx, hw, obj: g });
+  }
+  function spawnHammer(d) {
+    const side = Math.random() < 0.5 ? -1 : 1, hw = 1.4;
+    const cx = side * (ROAD_HALF - hw + 0.5);
+    const g = new T.Group(), ham = new T.Group();
+    const head = new T.Mesh(new T.BoxGeometry(1.7, 0.75, 1.2), new T.MeshLambertMaterial({ color: 0x9aa0b4 }));
+    const handle = new T.Mesh(new T.CylinderGeometry(0.12, 0.12, 1.9, 8), new T.MeshLambertMaterial({ color: 0x6e4a2a }));
+    handle.position.y = 1.3; ham.add(head); ham.add(handle);
+    ham.position.set(cx, 2.5, 0); g.add(ham);
+    scene.add(g);
+    objects.push({ type: 'hammer', worldZ: d, cx, hw, side, obj: g, ham });
   }
 
   function clearObjects() { for (const o of objects) disposeObj(o); objects = []; }
@@ -371,10 +394,40 @@
     if (shake > 0) shake = Math.max(0, shake - dt * 1.6);
     // бег полос
     if (roadMat && roadMat._tex) roadMat._tex.offset.y = -traveled * 0.25;
-    // позиции объектов
-    for (const o of objects) if (o.obj) o.obj.position.z = o.worldZ - traveled;
+    // позиции объектов + анимация молотков
+    for (const o of objects) {
+      if (o.obj) o.obj.position.z = o.worldZ - traveled;
+      if (o.type === 'hammer') { const z = o.worldZ - traveled; o.ham.position.y = z > 5 ? 2.5 : (z < 0.3 ? 0.5 : 0.5 + (z / 5) * 2.0); }
+    }
+    if (mode === 'play') updateGunners(dt);
+    updateBullets(dt);
     updateCrowd(dt);
     updateBurst(dt);
+  }
+
+  // ===== Стрелки =====
+  function updateGunners(dt) {
+    let g = null, gz = 1e9;
+    for (const o of objects) if (o.type === 'gunner' && !o.done) { const z = o.worldZ - traveled; if (z > 0.6 && z < 16 && z < gz) { gz = z; g = o; } }
+    if (!g) return;
+    g.fireT -= dt;
+    const interval = Math.max(0.05, 0.42 / Math.sqrt(g.count));
+    let guard = 0;
+    while (g.fireT <= 0 && guard++ < 6) { g.fireT += interval; fireBullet(gz); }
+  }
+  function fireBullet(gz) {
+    for (const b of bullets) if (b.life <= 0) { b.life = 1.6; b.x = (Math.random() - 0.5) * 2; b.y = 0.9; b.z = gz; return; }
+  }
+  function updateBullets(dt) {
+    if (!bulletMesh) return;
+    let n = 0;
+    for (const b of bullets) {
+      if (b.life <= 0) continue;
+      b.life -= dt; b.z -= 24 * dt; b.x += (crowdX - b.x) * Math.min(1, dt * 3);
+      if (b.z <= 0.5) { b.life = 0; if (mode === 'play') { N = Math.max(0, N - 1); spawnBurst(1); } continue; }
+      _m.makeScale(0.5, 0.5, 0.5); _m.setPosition(b.x, b.y, b.z); bulletMesh.setMatrixAt(n++, _m);
+    }
+    bulletMesh.count = n; bulletMesh.instanceMatrix.needsUpdate = true;
   }
 
   function crowdWidth() { return Math.min(1.9, 0.35 + Math.sqrt(Math.min(N, CAP)) * 0.085); }
@@ -419,7 +472,7 @@
     }
     // ближайшая вражеская толпа
     let en = null, enz = 1e9;
-    for (const o of objects) if (o.type === 'enemy' && !o.done) { const z = o.worldZ - traveled; if (z > -1 && z < FAR && z < enz) { enz = z; en = o; } }
+    for (const o of objects) if ((o.type === 'enemy' || o.type === 'gunner') && !o.done) { const z = o.worldZ - traveled; if (z > -1 && z < FAR && z < enz) { enz = z; en = o; } }
     if (en) {
       const ec = Math.max(0, Math.min(en.count, CAP));
       const espread = Math.min(2.2, 0.5 + Math.sqrt(ec) * 0.095);
@@ -444,9 +497,21 @@
         if (Math.abs(crowdX - o.cx) < o.hw + crowdWidth() * 0.5) {
           N = Math.max(0, N - o.dmg); spawnBurst(Math.min(o.dmg, 24)); if (window.GameAudio) GameAudio.sfx('fail');
         }
-      } else if (o.type === 'wall') {
-        N -= o.req; spawnBurst(Math.min(o.req, 36)); if (window.GameAudio) GameAudio.sfx('clear');
-        if (N > 0) runCoins += Math.max(1, Math.round(o.req / 2)); else N = 0;
+      } else if (o.type === 'pit') {
+        if (Math.abs(crowdX - o.cx) < o.hw + crowdWidth() * 0.35) {
+          const lost = Math.max(1, Math.round(N * 0.5));
+          N = Math.max(0, N - lost); spawnBurst(Math.min(lost, 30));
+          if (window.GameAudio) GameAudio.sfx('fail');
+        }
+      } else if (o.type === 'hammer') {
+        if (Math.abs(crowdX - o.cx) < o.hw + crowdWidth() * 0.35) {
+          const lost = Math.max(1, Math.round(N * 0.45));
+          N = Math.max(0, N - lost); spawnBurst(Math.min(lost, 30)); shake = Math.min(0.6, shake + 0.4);
+          if (window.GameAudio) GameAudio.sfx('fail');
+        }
+      } else if (o.type === 'gunner') {
+        spawnBurstRed(Math.min(o.count, 30), 0.3);
+        if (window.GameAudio) GameAudio.sfx('clear');
       } else if (o.type === 'enemy') {
         // замес: чья толпа больше, тот побеждает
         if (N > o.count) {
