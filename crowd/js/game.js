@@ -112,7 +112,8 @@
     buildWorld(); buildFx(); bindInput(); updateHUD();
     renderer.setAnimationLoop(loop);
 
-    new T.GLTFLoader().load('assets/char.glb', (g) => {
+    const loader = new T.GLTFLoader();
+    const onModel = (g) => {
       tmpl = g.scene;
       g.animations.forEach((a) => { clips[a.name] = a; });
       tmpl.updateMatrixWorld(true);
@@ -125,7 +126,13 @@
       loaded = true;
       const b = $('btn-start'); b.disabled = false; b.textContent = 'В бой!';
       resetCrowdIdle();
-    }, undefined, (e) => { console.error('model load failed', e); $('btn-start').textContent = 'Ошибка загрузки'; });
+    };
+    const onErr = (e) => { console.error('model load failed', e); $('btn-start').textContent = 'Ошибка загрузки'; };
+    if (window.CHAR_GLB_B64) { // запасной вариант для превью: модель встроена в js
+      const bin = atob(window.CHAR_GLB_B64), buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      loader.parse(buf.buffer, '', onModel, onErr);
+    } else loader.load('assets/char.glb', onModel, undefined, onErr);
   }
 
   function resize() {
