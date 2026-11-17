@@ -12,7 +12,7 @@ html, body {
 #game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 .sound-btn {
-  position: absolute; z-index: 6; top: calc(14px + env(safe-area-inset-top)); right: 14px;
+  position: absolute; z-index: 6; top: calc(14px + env(safe-area-inset-top)); left: 12px;
   border: none; cursor: pointer; background: rgba(0,0,0,0.3); color: #fff; font-size: 18px;
   width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
 }
@@ -21,8 +21,29 @@ html, body {
   position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 4;
   display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none;
 }
-.crowd-count { font-size: 46px; font-weight: 900; text-shadow: 0 3px 12px rgba(0,0,0,.5); }
-.dist, .coins { font-size: 15px; font-weight: 700; color: var(--muted); text-shadow: 0 2px 6px rgba(0,0,0,.5); }
+.progress { display: flex; align-items: center; gap: 0; margin-top: 8px; }
+.progress .lvl {
+  width: 34px; height: 34px; border-radius: 50%; background: #2f9bff; border: 3px solid #fff;
+  display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; z-index: 1;
+  box-shadow: 0 2px 6px rgba(40,30,90,.35);
+}
+.progress .bar { width: 150px; height: 14px; background: #3b3a5c; border: 3px solid #fff; border-left: none; border-right: none; margin: 0 -4px; overflow: hidden; }
+.progress .fill { height: 100%; width: 0%; background: #2fc0ff; transition: width .15s linear; }
+.progress .flag {
+  width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 3px solid #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; z-index: 1;
+  box-shadow: 0 2px 6px rgba(40,30,90,.35);
+}
+.coins-pill {
+  position: absolute; z-index: 5; top: calc(58px + env(safe-area-inset-top)); right: 10px;
+  display: flex; align-items: center; gap: 8px; background: rgba(60,58,96,.55); color: #fff;
+  border-radius: 22px; padding: 5px 6px 5px 18px; font-weight: 900; font-size: 22px; pointer-events: none;
+}
+.coins-pill .coin-ico {
+  width: 32px; height: 32px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffe680, #ffb300 70%);
+  color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; text-shadow: 0 1px 2px rgba(150,80,0,.6);
+}
+.btn:disabled { opacity: .6; }
 
 .tap-hint {
   position: absolute; bottom: calc(26px + env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center;
