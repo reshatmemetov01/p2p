@@ -67,11 +67,11 @@
   function init() {
     load(); buildSlots();
     scene = new T.Scene();
-    const sky = new T.Color(0xbfe6fb);
+    const sky = new T.Color(0xdcd9f6);
     scene.background = sky;
-    scene.fog = new T.Fog(sky, 30, FAR);
+    scene.fog = new T.Fog(sky, 34, 62);
 
-    camera = new T.PerspectiveCamera(58, 1, 0.1, 300);
+    camera = new T.PerspectiveCamera(46, 1, 0.1, 300);
 
     renderer = new T.WebGLRenderer({ canvas, antialias: true });
     resize();
@@ -102,33 +102,34 @@
   // ===== Статичный мир (дорога, земля, горы) =====
   let roadMat;
   function buildStaticWorld() {
-    // земля (снег) — большая
-    const groundMat = new T.MeshLambertMaterial({ color: 0xd3e6f2 });
-    const ground = new T.Mesh(new T.PlaneGeometry(400, 400), groundMat);
-    ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, 60); scene.add(ground);
-
-    // дорога с бегущими полосами (текстура)
+    // дорога с мягкими бегущими полосами (лавандовая)
     const rc = document.createElement('canvas'); rc.width = 8; rc.height = 64;
     const rx = rc.getContext('2d');
-    for (let i = 0; i < 8; i++) { rx.fillStyle = (i % 2 === 0) ? '#f3f7fb' : '#e4edf4'; rx.fillRect(0, i * 8, 8, 8); }
-    const rtex = new T.CanvasTexture(rc); rtex.wrapS = rtex.wrapT = T.RepeatWrapping; rtex.repeat.set(1, 40);
+    for (let i = 0; i < 8; i++) { rx.fillStyle = (i % 2 === 0) ? '#cac4ef' : '#c0b9e9'; rx.fillRect(0, i * 8, 8, 8); }
+    const rtex = new T.CanvasTexture(rc); rtex.wrapS = rtex.wrapT = T.RepeatWrapping; rtex.repeat.set(1, 36);
     roadMat = new T.MeshLambertMaterial({ map: rtex });
     const road = new T.Mesh(new T.PlaneGeometry(ROAD_W, 320), roadMat);
     road.rotation.x = -Math.PI / 2; road.position.set(0, 0, 150); scene.add(road);
     roadMat._tex = rtex;
 
-    // горы по бокам (конусы)
-    const mMat = new T.MeshLambertMaterial({ color: 0xcfe6f5 });
-    const capMat = new T.MeshLambertMaterial({ color: 0xffffff });
-    for (let i = 0; i < 16; i++) {
+    // белые бортики дороги
+    const edgeMat = new T.MeshBasicMaterial({ color: 0xffffff });
+    [-1, 1].forEach((s) => {
+      const e = new T.Mesh(new T.BoxGeometry(0.18, 0.22, 320), edgeMat);
+      e.position.set(s * ROAD_W / 2, 0.08, 150); scene.add(e);
+    });
+
+    // мягкие абстрактные боковые блоки (пустота по бокам)
+    const blockMat = new T.MeshLambertMaterial({ color: 0xb9c6ec });
+    const blockMat2 = new T.MeshLambertMaterial({ color: 0xc7d2f0 });
+    for (let i = 0; i < 26; i++) {
       const side = i % 2 === 0 ? -1 : 1;
-      const z = 15 + (i >> 1) * 7 + Math.random() * 4;
-      const x = side * (10 + Math.random() * 8);
-      const h = 6 + Math.random() * 7;
-      const m = new T.Mesh(new T.ConeGeometry(3 + Math.random() * 2, h, 5), mMat);
-      m.position.set(x, h / 2 - 0.5, z); m.rotation.y = Math.random(); scene.add(m);
-      const cap = new T.Mesh(new T.ConeGeometry((3 + Math.random()) * 0.45, h * 0.32, 5), capMat);
-      cap.position.set(x, h - h * 0.16 - 0.5, z); cap.rotation.y = m.rotation.y; scene.add(cap);
+      const z = 8 + (i >> 1) * 7 + Math.random() * 5;
+      const x = side * (7 + Math.random() * 10);
+      const h = 1 + Math.random() * 4;
+      const w = 1.2 + Math.random() * 2.5;
+      const m = new T.Mesh(new T.BoxGeometry(w, h, w), Math.random() < 0.5 ? blockMat : blockMat2);
+      m.position.set(x, h / 2 - 0.3, z); m.rotation.y = Math.random() * 0.6; scene.add(m);
     }
   }
 
@@ -141,29 +142,24 @@
     }
   }
   // Длины конечностей (совпадают с геометрией; pivot сверху в начале координат)
-  const ARM_LEN = 0.34, LEG_LEN = 0.46;
-  const CAM = { x: 0, y: 3.5, z: -5.0, tx: 0, ty: 0.7, tz: 7.5 };
-  // Создать набор частей тела заданного цвета (синий игрок / красный враг)
+  const ARM_LEN = 0.26, LEG_LEN = 0.34;
+  const CAM = { x: 0, y: 6.6, z: -8.2, tx: 0, ty: -0.4, tz: 10 };
+  // Создать набор частей тела (гладкие «чанковые» фигурки — как в референсе)
   function buildCharSet(color) {
-    const headGeo = new T.SphereGeometry(0.2, 14, 12); headGeo.translate(0, 1.0, 0);
-    const neckGeo = new T.CylinderGeometry(0.06, 0.06, 0.14, 6); neckGeo.translate(0, 0.8, 0);
-    const torsoGeo = new T.CylinderGeometry(0.085, 0.12, 0.42, 8); torsoGeo.translate(0, 0.55, 0);
-    const armGeo = new T.CylinderGeometry(0.05, 0.045, ARM_LEN, 6); armGeo.translate(0, -ARM_LEN / 2, 0);
-    const legGeo = new T.CylinderGeometry(0.06, 0.05, LEG_LEN, 6); legGeo.translate(0, -LEG_LEN / 2, 0);
-    const handGeo = new T.SphereGeometry(0.075, 8, 6);
-    const footGeo = new T.SphereGeometry(0.09, 8, 6); footGeo.scale(1, 0.7, 1.4);
-    const shadowGeo = new T.CircleGeometry(0.24, 12); shadowGeo.rotateX(-Math.PI / 2);
+    const torsoGeo = new T.SphereGeometry(0.26, 12, 10); torsoGeo.scale(1, 1.32, 1); torsoGeo.translate(0, 0.5, 0);
+    const headGeo = new T.SphereGeometry(0.21, 12, 10); headGeo.translate(0, 0.94, 0);
+    const legGeo = new T.CylinderGeometry(0.1, 0.085, LEG_LEN, 6); legGeo.translate(0, -LEG_LEN / 2, 0);
+    const armGeo = new T.CylinderGeometry(0.075, 0.06, ARM_LEN, 6); armGeo.translate(0, -ARM_LEN / 2, 0);
+    const shadowGeo = new T.CircleGeometry(0.3, 14); shadowGeo.rotateX(-Math.PI / 2);
     const im = (geo, col, opts) => {
       const m = new T.InstancedMesh(geo, new T.MeshLambertMaterial(Object.assign({ color: col }, opts || {})), CAP);
       m.instanceMatrix.setUsage(T.DynamicDrawUsage); m.frustumCulled = false; scene.add(m); return m;
     };
     return {
-      shadow: im(shadowGeo, 0x183a66, { transparent: true, opacity: 0.2 }),
+      shadow: im(shadowGeo, 0x4a4a7a, { transparent: true, opacity: 0.22 }),
       legL: im(legGeo, color), legR: im(legGeo, color),
-      footL: im(footGeo, color), footR: im(footGeo, color),
-      torso: im(torsoGeo, color), armL: im(armGeo, color), armR: im(armGeo, color),
-      handL: im(handGeo, color), handR: im(handGeo, color),
-      neck: im(neckGeo, color), head: im(headGeo, color),
+      armL: im(armGeo, color), armR: im(armGeo, color),
+      torso: im(torsoGeo, color), head: im(headGeo, color),
     };
   }
   function makePool(color) {
@@ -369,7 +365,7 @@
     updateBurst(dt);
   }
 
-  function crowdWidth() { return Math.min(2.6, 0.5 + Math.sqrt(Math.min(N, CAP)) * 0.12); }
+  function crowdWidth() { return Math.min(1.9, 0.35 + Math.sqrt(Math.min(N, CAP)) * 0.085); }
 
   function ballAt(mesh, i, px, py, pz, len, swing) {
     _m.makeTranslation(px, py - len * Math.cos(swing), pz - len * Math.sin(swing));
@@ -378,20 +374,20 @@
   function poseCrowdSet(set, count, cx, cz, spread, running) {
     for (let i = 0; i < count; i++) {
       const s = slots[i];
-      const run = running ? (t * 13 + s.ph) : s.ph;
-      const bob = running ? Math.abs(Math.sin(run)) * 0.07 : 0;
+      const run = running ? (t * 12 + s.ph) : s.ph;
+      const bob = running ? Math.abs(Math.sin(run)) * 0.06 : 0;
       const px = cx + s.x * spread, pz = cz + s.z * spread, py = bob;
-      const ls = running ? Math.sin(run) * 0.6 : 0;
-      const as = running ? Math.sin(run) * 0.5 : 0;
+      const ls = running ? Math.sin(run) * 0.5 : 0;
+      const as = running ? Math.sin(run) * 0.35 : 0.1;
       _m.makeTranslation(px, 0.02, pz); set.shadow.setMatrixAt(i, _m);
       _m.makeTranslation(px, py, pz);
-      set.torso.setMatrixAt(i, _m); set.neck.setMatrixAt(i, _m); set.head.setMatrixAt(i, _m);
+      set.torso.setMatrixAt(i, _m); set.head.setMatrixAt(i, _m);
+      // короткие ножки (pivot — бедро)
       const hy = py + LEG_LEN;
-      setLimb(set.legL, i, px - 0.07, hy, pz, ls); setLimb(set.legR, i, px + 0.07, hy, pz, -ls);
-      ballAt(set.footL, i, px - 0.07, hy, pz, LEG_LEN, ls); ballAt(set.footR, i, px + 0.07, hy, pz, LEG_LEN, -ls);
-      const sy = py + 0.74;
-      setLimb(set.armL, i, px - 0.12, sy, pz, -as); setLimb(set.armR, i, px + 0.12, sy, pz, as);
-      ballAt(set.handL, i, px - 0.12, sy, pz, ARM_LEN, -as); ballAt(set.handR, i, px + 0.12, sy, pz, ARM_LEN, as);
+      setLimb(set.legL, i, px - 0.11, hy, pz, ls); setLimb(set.legR, i, px + 0.11, hy, pz, -ls);
+      // короткие ручки по бокам (pivot — плечо)
+      const sy = py + 0.62;
+      setLimb(set.armL, i, px - 0.24, sy, pz, -as); setLimb(set.armR, i, px + 0.24, sy, pz, as);
     }
     for (const k in set) { set[k].count = count; set[k].instanceMatrix.needsUpdate = true; }
   }
@@ -413,7 +409,7 @@
     for (const o of objects) if (o.type === 'enemy' && !o.done) { const z = o.worldZ - traveled; if (z > -1 && z < FAR && z < enz) { enz = z; en = o; } }
     if (en) {
       const ec = Math.max(0, Math.min(en.count, CAP));
-      const espread = Math.min(3.2, 0.8 + Math.sqrt(ec) * 0.13);
+      const espread = Math.min(2.2, 0.5 + Math.sqrt(ec) * 0.095);
       poseCrowdSet(eparts, ec, 0, enz, espread, true);
       ecountSprite.visible = true; ecountSprite.position.set(0, 1.7 + espread * 0.2, enz + 0.3);
       if (en.count !== eLastN) {
