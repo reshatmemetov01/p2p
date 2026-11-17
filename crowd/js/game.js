@@ -20,12 +20,16 @@
   let bluePool, redPool;           // «разлёт»: пулы летящих кусочков
   const enemyPlaced = new Set();
   let shake = 0;                   // тряска камеры
-  const _m = new T.Matrix4(), _r = new T.Matrix4(), _s = new T.Vector3();
+  const _m = new T.Matrix4(), _r = new T.Matrix4(), _s = new T.Vector3(), _cv = new T.Vector3();
   let W = 0, H = 0;
 
-  let mode = 'ready';
-  let N = 10, lat = 0, targetLat = 0, crowdX = 0;
+  let mode = 'ready';   // ready | play | finish | over
+  let N = 10, lat = 0, targetLat = 0, crowdX = 0, crowdZ = 0, crowdY = 0;
   let traveled = 0, dist = 0, speed = 0, t = 0;
+  let level = 1, FINISH = 180;
+  let stairs = [], finaleMult = 1, finaleReward = 0, finaleT = 0, finaleStep = 0, finaleShown = false;
+  const STEP_MULT = [1, 1.3, 1.6, 2, 2.5, 3, 4], THRESH = [0, 15, 30, 50, 80, 120, 180];
+  const STEPS = 7, STEP_H = 0.62, STEP_D = 1.6, STAIR_Z = 6;
   let objects = [], genDist = 0; const wallPlaced = new Set();
   let coins = 0, runCoins = 0, bestDist = 0;
   let upg = { start: 0, income: 0 };
@@ -35,9 +39,9 @@
   const canvas = $('game');
 
   // ===== Сохранение =====
-  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ coins, upg, bestDist })); } catch (e) {} }
+  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ coins, upg, bestDist, level })); } catch (e) {} }
   function load() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-    if (s) { coins = s.coins || 0; upg = Object.assign(upg, s.upg || {}); bestDist = s.bestDist || 0; } } catch (e) {} }
+    if (s) { coins = s.coins || 0; upg = Object.assign(upg, s.upg || {}); bestDist = s.bestDist || 0; level = s.level || 1; } } catch (e) {} }
 
   // ===== Текстуры с числами =====
   function numTexture(text, bg, fg) {
@@ -146,11 +150,11 @@
   const CAM = { x: 0, y: 6.6, z: -8.2, tx: 0, ty: -0.4, tz: 10 };
   // Создать набор частей тела (гладкие «чанковые» фигурки — как в референсе)
   function buildCharSet(color) {
-    const torsoGeo = new T.SphereGeometry(0.26, 12, 10); torsoGeo.scale(1, 1.32, 1); torsoGeo.translate(0, 0.5, 0);
-    const headGeo = new T.SphereGeometry(0.21, 12, 10); headGeo.translate(0, 0.94, 0);
-    const legGeo = new T.CylinderGeometry(0.1, 0.085, LEG_LEN, 6); legGeo.translate(0, -LEG_LEN / 2, 0);
-    const armGeo = new T.CylinderGeometry(0.075, 0.06, ARM_LEN, 6); armGeo.translate(0, -ARM_LEN / 2, 0);
-    const shadowGeo = new T.CircleGeometry(0.3, 14); shadowGeo.rotateX(-Math.PI / 2);
+    const torsoGeo = new T.SphereGeometry(0.25, 14, 12); torsoGeo.scale(1, 1.42, 0.95); torsoGeo.translate(0, 0.46, 0);
+    const headGeo = new T.SphereGeometry(0.175, 14, 12); headGeo.translate(0, 0.9, 0);
+    const legGeo = new T.CylinderGeometry(0.095, 0.08, LEG_LEN, 6); legGeo.translate(0, -LEG_LEN / 2, 0);
+    const armGeo = new T.CylinderGeometry(0.062, 0.05, ARM_LEN, 6); armGeo.translate(0, -ARM_LEN / 2, 0);
+    const shadowGeo = new T.CircleGeometry(0.28, 14); shadowGeo.rotateX(-Math.PI / 2);
     const im = (geo, col, opts) => {
       const m = new T.InstancedMesh(geo, new T.MeshLambertMaterial(Object.assign({ color: col }, opts || {})), CAP);
       m.instanceMatrix.setUsage(T.DynamicDrawUsage); m.frustumCulled = false; scene.add(m); return m;
@@ -232,15 +236,18 @@
   // ===== Старт =====
   function startRun() {
     hideScreens();
-    clearObjects();
-    N = 10 + upg.start * 2; lat = 0; targetLat = 0; crowdX = 0;
+    clearObjects(); clearStairs();
+    FINISH = 170 + (level - 1) * 20;
+    N = 10 + upg.start * 2; lat = 0; targetLat = 0; crowdX = 0; crowdZ = 0; crowdY = 0;
     traveled = 0; dist = 0; speed = 7; runCoins = 0;
     genDist = 10; wallPlaced.clear(); enemyPlaced.clear(); eLastN = -1;
     mode = 'play';
+    camera.position.set(CAM.x, CAM.y, CAM.z); camera.lookAt(CAM.tx, CAM.ty, CAM.tz);
     $('tap-hint').style.display = '';
     generateUpTo(FAR);
     updateHUD();
   }
+  function clearStairs() { for (const s of stairs) { scene.remove(s.obj); } stairs = []; }
 
   // ===== Генерация =====
   function generateUpTo(max) {
@@ -339,9 +346,11 @@
     const now = performance.now();
     const dt = loop._l ? Math.min((now - loop._l) / 1000, 0.05) : 0; loop._l = now; t += dt;
     update(dt);
-    // тряска камеры
-    if (shake > 0) { camera.position.x = CAM.x + (Math.random() - 0.5) * shake; camera.position.y = CAM.y + (Math.random() - 0.5) * shake; }
-    else if (camera.position.x !== CAM.x) { camera.position.x = CAM.x; camera.position.y = CAM.y; }
+    // тряска камеры (не во время финала — там своя камера)
+    if (mode !== 'finish') {
+      if (shake > 0) { camera.position.x = CAM.x + (Math.random() - 0.5) * shake; camera.position.y = CAM.y + (Math.random() - 0.5) * shake; }
+      else if (camera.position.x !== CAM.x) { camera.position.x = CAM.x; camera.position.y = CAM.y; }
+    }
     renderer.render(scene, camera);
   }
 
@@ -351,10 +360,13 @@
       traveled += speed * dt; dist = Math.floor(traveled);
       lat += (targetLat - lat) * Math.min(1, dt * 12); lat = Math.max(-1, Math.min(1, lat));
       crowdX = -lat * ROAD_HALF; // экран↔мир по X отзеркалены этой камерой
-      generateUpTo(traveled + FAR);
+      generateUpTo(Math.min(traveled + FAR, FINISH));
       processObjects();
       updateHUD();
       if (N <= 0) gameOver();
+      else if (traveled >= FINISH) enterFinale();
+    } else if (mode === 'finish') {
+      updateFinale(dt);
     }
     if (shake > 0) shake = Math.max(0, shake - dt * 1.6);
     // бег полос
@@ -371,15 +383,16 @@
     _m.makeTranslation(px, py - len * Math.cos(swing), pz - len * Math.sin(swing));
     mesh.setMatrixAt(i, _m);
   }
-  function poseCrowdSet(set, count, cx, cz, spread, running) {
+  function poseCrowdSet(set, count, cx, cz, spread, running, baseY) {
+    baseY = baseY || 0;
     for (let i = 0; i < count; i++) {
       const s = slots[i];
       const run = running ? (t * 12 + s.ph) : s.ph;
       const bob = running ? Math.abs(Math.sin(run)) * 0.06 : 0;
-      const px = cx + s.x * spread, pz = cz + s.z * spread, py = bob;
+      const px = cx + s.x * spread, pz = cz + s.z * spread, py = baseY + bob;
       const ls = running ? Math.sin(run) * 0.5 : 0;
       const as = running ? Math.sin(run) * 0.35 : 0.1;
-      _m.makeTranslation(px, 0.02, pz); set.shadow.setMatrixAt(i, _m);
+      _m.makeTranslation(px, baseY + 0.02, pz); set.shadow.setMatrixAt(i, _m);
       _m.makeTranslation(px, py, pz);
       set.torso.setMatrixAt(i, _m); set.head.setMatrixAt(i, _m);
       // короткие ножки (pivot — бедро)
@@ -392,13 +405,13 @@
     for (const k in set) { set[k].count = count; set[k].instanceMatrix.needsUpdate = true; }
   }
   function updateCrowd(dt) {
-    const running = mode === 'play';
+    const running = mode === 'play' || mode === 'finish';
     // игрок
     const want = Math.max(0, Math.min(N, CAP)), spread = crowdWidth();
-    poseCrowdSet(parts, want, crowdX, 0, spread, running);
+    poseCrowdSet(parts, want, crowdX, crowdZ, spread, running, crowdY);
     if (countSprite) {
       countSprite.visible = mode !== 'ready' && want > 0;
-      countSprite.position.set(crowdX, 1.7 + spread * 0.2, 0.3);
+      countSprite.position.set(crowdX, crowdY + 1.7 + spread * 0.2, crowdZ + 0.3);
       if (N !== lastShownN) {
         lastShownN = N; countSprite.material.map.dispose();
         countSprite.material.map = countTex(Math.max(0, N), '#2e86de'); countSprite.material.needsUpdate = true;
@@ -456,22 +469,95 @@
   }
 
   function gameOver() {
-    if (mode === 'over') return; mode = 'over';
+    if (mode === 'over' || mode === 'finish') return; mode = 'over';
     spawnBurst(40);
     const bonus = Math.round(dist / 8) * (1 + upg.income * 0.5);
     runCoins += Math.round(bonus); coins += runCoins;
     if (dist > bestDist) bestDist = dist; save();
-    $('end-dist').textContent = dist; $('end-coins').textContent = runCoins;
-    $('btn-x2').disabled = false; $('btn-x2').style.opacity = 1;
+    const end = $('end');
+    end.querySelector('.big-emoji').textContent = '💀';
+    end.querySelector('h1').textContent = 'Толпа пала!';
+    end.querySelector('.stats').innerHTML = '<div>Дистанция: <b>' + dist + '</b> м</div><div>Монеты за забег: <b id="end-coins">' + runCoins + '</b> 🪙</div>';
+    $('btn-revive').style.display = ''; $('btn-revive').onclick = revive;
+    $('btn-x2').style.display = ''; $('btn-x2').disabled = false; $('btn-x2').style.opacity = 1; $('btn-x2').onclick = doubleCoins;
+    $('btn-again').textContent = 'Заново'; $('btn-again').onclick = () => { $('end').classList.add('hidden'); maybeInterstitial(startRun); };
     $('tap-hint').style.display = 'none';
-    $('end').classList.remove('hidden');
+    end.classList.remove('hidden');
     if (window.GameAudio) GameAudio.sfx('fail');
   }
+
+  // ===== Финал: лестница множителей =====
+  function stepTex(text) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const x = c.getContext('2d');
+    x.font = '900 86px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.lineWidth = 12; x.strokeStyle = '#2b6fd0'; x.strokeText(text, 128, 68);
+    x.fillStyle = '#ffffff'; x.fillText(text, 128, 68);
+    const tex = new T.CanvasTexture(c); tex.wrapS = T.RepeatWrapping; tex.repeat.x = -1; tex.offset.x = 1;
+    return tex;
+  }
+  function buildStairs(reach) {
+    clearStairs();
+    const colors = [0xf2c14e, 0xf2a74e, 0xe86a92, 0x9b6ae8, 0x6a9be8, 0x6ae8a0, 0xe8e86a];
+    for (let i = 0; i < STEPS; i++) {
+      const g = new T.Group();
+      const topY = (i + 1) * STEP_H;            // верх ступени
+      const box = new T.Mesh(new T.BoxGeometry(ROAD_W, topY, STEP_D),
+        new T.MeshLambertMaterial({ color: colors[i % colors.length] }));
+      box.position.set(0, topY / 2, STAIR_Z + i * STEP_D);
+      g.add(box);
+      // подпись множителя на видимой грани ступени
+      const tex = stepTex('x' + STEP_MULT[i]);
+      const lab = new T.Mesh(new T.PlaneGeometry(ROAD_W * 0.42, STEP_H * 0.9), new T.MeshBasicMaterial({ map: tex, transparent: true }));
+      lab.position.set(0, i * STEP_H + STEP_H / 2, STAIR_Z + i * STEP_D - STEP_D / 2 + 0.03);
+      g.add(lab);
+      scene.add(g); stairs.push({ obj: g });
+    }
+  }
+  function enterFinale() {
+    if (mode === 'finish' || mode === 'over') return;
+    mode = 'finish'; finaleT = 0; finaleShown = false;
+    clearObjects();
+    let reach = 0; for (let i = 0; i < STEPS; i++) if (N >= THRESH[i]) reach = i;
+    finaleStep = reach; finaleMult = STEP_MULT[reach];
+    finaleReward = Math.max(1, Math.round(N * finaleMult * (1 + upg.income * 0.5)));
+    buildStairs(reach);
+    $('tap-hint').style.display = 'none';
+    if (window.GameAudio) GameAudio.sfx('win');
+  }
+  function updateFinale(dt) {
+    finaleT += dt;
+    const tz = STAIR_Z + finaleStep * STEP_D, ty = (finaleStep + 1) * STEP_H + 0.05;
+    crowdZ += (tz - crowdZ) * Math.min(1, dt * 2.2);
+    crowdY += (ty - crowdY) * Math.min(1, dt * 2.2);
+    _cv.set(0, ty + 6.4, tz - 7.8);
+    camera.position.lerp(_cv, Math.min(1, dt * 2.6));
+    camera.lookAt(0, ty - 0.2, tz + 1.5);
+    if (finaleT > 1.9 && !finaleShown) { finaleShown = true; showWin(); }
+  }
+  function showWin() {
+    coins += finaleReward; if (dist > bestDist) bestDist = dist; save();
+    spawnBurst(30);
+    const end = $('end');
+    end.querySelector('.big-emoji').textContent = '🏆';
+    end.querySelector('h1').textContent = 'Уровень ' + level + ' пройден!';
+    end.querySelector('.stats').innerHTML = '<div>Множитель: <b>x' + finaleMult + '</b></div><div>Награда: <b id="end-coins">' + finaleReward + '</b> 🪙</div>';
+    $('btn-revive').style.display = 'none';
+    $('btn-x2').style.display = ''; $('btn-x2').disabled = false; $('btn-x2').style.opacity = 1;
+    $('btn-x2').onclick = () => window.YSDK.showRewarded(() => {
+      coins += finaleReward; $('end-coins').textContent = finaleReward * 2;
+      $('btn-x2').disabled = true; $('btn-x2').style.opacity = 0.5; save(); updateHUD();
+      if (window.GameAudio) GameAudio.sfx('coin');
+    });
+    $('btn-again').textContent = 'Дальше ▶'; $('btn-again').onclick = nextLevel;
+    updateHUD(); end.classList.remove('hidden');
+  }
+  function nextLevel() { level++; save(); $('end').classList.add('hidden'); maybeInterstitial(startRun); }
 
   // ===== HUD / магазин =====
   function updateHUD() {
     $('crowd').textContent = Math.max(0, N);
-    $('dist').textContent = dist;
+    $('dist').textContent = 'Ур.' + level + ' · ' + dist + '/' + FINISH + 'м';
     $('coins').textContent = coins + (runCoins ? '+' + runCoins : '');
   }
   const UPG_DEF = {
@@ -527,6 +613,7 @@
       addCoins: (n) => { coins += n; save(); updateHUD(); },
       forceOver: () => { N = 0; },
       grow: (n) => { N += (n || 20); updateHUD(); },
+      toFinish: () => { clearObjects(); genDist = FINISH + 100; traveled = FINISH - 0.5; },
       burst: () => spawnBurst(30),
       webgl: () => !!(renderer && renderer.getContext()),
     };
