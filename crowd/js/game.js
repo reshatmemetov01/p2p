@@ -15,9 +15,10 @@
 
   // ---- Состояние ----
   let scene, camera, renderer;
-  let parts = {};            // InstancedMesh по частям тела (torso/head/legL/...)
-  let countSprite, lastShownN = -1;
-  let burstMesh, burstData = [];   // «разлёт»: летящие кусочки
+  let parts = {}, eparts = {};     // синяя толпа игрока / красная вражеская
+  let countSprite, ecountSprite, lastShownN = -1, eLastN = -1;
+  let bluePool, redPool;           // «разлёт»: пулы летящих кусочков
+  const enemyPlaced = new Set();
   let shake = 0;                   // тряска камеры
   const _m = new T.Matrix4(), _r = new T.Matrix4(), _s = new T.Vector3();
   let W = 0, H = 0;
@@ -142,9 +143,8 @@
   // Длины конечностей (совпадают с геометрией; pivot сверху в начале координат)
   const ARM_LEN = 0.34, LEG_LEN = 0.46;
   const CAM = { x: 0, y: 3.5, z: -5.0, tx: 0, ty: 0.7, tz: 7.5 };
-  function buildCrowd() {
-    const BLUE = 0x1f6fe0;
-    // Голова, шея, торс — смещены (стоят на месте). Конечности — крутятся вокруг верхней точки.
+  // Создать набор частей тела заданного цвета (синий игрок / красный враг)
+  function buildCharSet(color) {
     const headGeo = new T.SphereGeometry(0.2, 14, 12); headGeo.translate(0, 1.0, 0);
     const neckGeo = new T.CylinderGeometry(0.06, 0.06, 0.14, 6); neckGeo.translate(0, 0.8, 0);
     const torsoGeo = new T.CylinderGeometry(0.085, 0.12, 0.42, 8); torsoGeo.translate(0, 0.55, 0);
@@ -153,64 +153,69 @@
     const handGeo = new T.SphereGeometry(0.075, 8, 6);
     const footGeo = new T.SphereGeometry(0.09, 8, 6); footGeo.scale(1, 0.7, 1.4);
     const shadowGeo = new T.CircleGeometry(0.24, 12); shadowGeo.rotateX(-Math.PI / 2);
-
-    const im = (geo, color, opts) => {
-      const mat = new T.MeshLambertMaterial(Object.assign({ color }, opts || {}));
-      const m = new T.InstancedMesh(geo, mat, CAP);
-      m.instanceMatrix.setUsage(T.DynamicDrawUsage);
-      m.frustumCulled = false; scene.add(m); return m;
+    const im = (geo, col, opts) => {
+      const m = new T.InstancedMesh(geo, new T.MeshLambertMaterial(Object.assign({ color: col }, opts || {})), CAP);
+      m.instanceMatrix.setUsage(T.DynamicDrawUsage); m.frustumCulled = false; scene.add(m); return m;
     };
-    parts.shadow = im(shadowGeo, 0x183a66, { transparent: true, opacity: 0.2 });
-    parts.legL = im(legGeo, BLUE); parts.legR = im(legGeo, BLUE);
-    parts.footL = im(footGeo, BLUE); parts.footR = im(footGeo, BLUE);
-    parts.torso = im(torsoGeo, BLUE);
-    parts.armL = im(armGeo, BLUE); parts.armR = im(armGeo, BLUE);
-    parts.handL = im(handGeo, BLUE); parts.handR = im(handGeo, BLUE);
-    parts.neck = im(neckGeo, BLUE);
-    parts.head = im(headGeo, BLUE);
-
-    // «Разлёт» — пул летящих шариков
-    burstMesh = new T.InstancedMesh(new T.SphereGeometry(0.16, 8, 6), new T.MeshLambertMaterial({ color: BLUE }), 160);
-    burstMesh.instanceMatrix.setUsage(T.DynamicDrawUsage); burstMesh.frustumCulled = false; scene.add(burstMesh);
-    for (let i = 0; i < 160; i++) burstData.push({ life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
-
-    // Пузырь с числом над толпой
-    countSprite = new T.Sprite(new T.SpriteMaterial({ map: countTex(10), depthTest: false, transparent: true }));
+    return {
+      shadow: im(shadowGeo, 0x183a66, { transparent: true, opacity: 0.2 }),
+      legL: im(legGeo, color), legR: im(legGeo, color),
+      footL: im(footGeo, color), footR: im(footGeo, color),
+      torso: im(torsoGeo, color), armL: im(armGeo, color), armR: im(armGeo, color),
+      handL: im(handGeo, color), handR: im(handGeo, color),
+      neck: im(neckGeo, color), head: im(headGeo, color),
+    };
+  }
+  function makePool(color) {
+    const mesh = new T.InstancedMesh(new T.SphereGeometry(0.16, 8, 6), new T.MeshLambertMaterial({ color }), 140);
+    mesh.instanceMatrix.setUsage(T.DynamicDrawUsage); mesh.frustumCulled = false; scene.add(mesh);
+    const data = []; for (let i = 0; i < 140; i++) data.push({ life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
+    return { mesh, data };
+  }
+  function buildCrowd() {
+    parts = buildCharSet(0x1f6fe0);   // синяя толпа (игрок)
+    eparts = buildCharSet(0xe23b3b);  // красная толпа (враг)
+    bluePool = makePool(0x1f6fe0); redPool = makePool(0xe23b3b);
+    countSprite = new T.Sprite(new T.SpriteMaterial({ map: countTex(10, '#2e86de'), depthTest: false, transparent: true }));
     countSprite.scale.set(1.3, 0.66, 1); countSprite.renderOrder = 10; scene.add(countSprite);
+    ecountSprite = new T.Sprite(new T.SpriteMaterial({ map: countTex(10, '#e23b3b'), depthTest: false, transparent: true }));
+    ecountSprite.scale.set(1.3, 0.66, 1); ecountSprite.renderOrder = 10; ecountSprite.visible = false; scene.add(ecountSprite);
   }
 
   // ===== Разлёт =====
-  function spawnBurst(count) {
+  function spawnInPool(pool, count, cx, cz) {
     let spawned = 0;
-    for (let i = 0; i < burstData.length && spawned < count; i++) {
-      const b = burstData[i]; if (b.life > 0) continue;
+    for (let i = 0; i < pool.data.length && spawned < count; i++) {
+      const b = pool.data[i]; if (b.life > 0) continue;
       const a = Math.random() * 6.28, sp = 2 + Math.random() * 3;
       b.life = 0.7 + Math.random() * 0.4;
-      b.x = crowdX + (Math.random() - 0.5) * 1.2; b.y = 0.5 + Math.random() * 0.5; b.z = (Math.random() - 0.5) * 1.2;
+      b.x = cx + (Math.random() - 0.5) * 1.4; b.y = 0.5 + Math.random() * 0.6; b.z = cz + (Math.random() - 0.5) * 1.4;
       b.vx = Math.cos(a) * sp; b.vz = Math.sin(a) * sp; b.vy = 4 + Math.random() * 3;
       spawned++;
     }
-    shake = Math.min(0.5, shake + 0.25);
+    shake = Math.min(0.55, shake + 0.28);
   }
-  function updateBurst(dt) {
-    if (!burstMesh) return;
+  function spawnBurst(count) { spawnInPool(bluePool, count, crowdX, 0); }
+  function spawnBurstRed(count, cz) { spawnInPool(redPool, count, 0, cz); }
+  function updatePool(pool, dt) {
     let n = 0;
-    for (const b of burstData) {
+    for (const b of pool.data) {
       if (b.life <= 0) continue;
       b.life -= dt; b.vy -= 14 * dt;
       b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
       if (b.y < 0.1) { b.y = 0.1; b.vy *= -0.4; b.vx *= 0.7; b.vz *= 0.7; }
       const sc = Math.max(0.01, Math.min(1, b.life * 1.6));
       _m.makeScale(sc, sc, sc); _m.setPosition(b.x, b.y, b.z);
-      burstMesh.setMatrixAt(n++, _m);
+      pool.mesh.setMatrixAt(n++, _m);
     }
-    burstMesh.count = n; burstMesh.instanceMatrix.needsUpdate = true;
+    pool.mesh.count = n; pool.mesh.instanceMatrix.needsUpdate = true;
   }
+  function updateBurst(dt) { updatePool(bluePool, dt); updatePool(redPool, dt); }
 
-  function countTex(n) {
+  function countTex(n, bg) {
     const c = document.createElement('canvas'); c.width = 160; c.height = 80;
     const x = c.getContext('2d');
-    x.fillStyle = '#2e86de'; roundRect(x, 6, 6, 148, 56, 16); x.fill();
+    x.fillStyle = bg || '#2e86de'; roundRect(x, 6, 6, 148, 56, 16); x.fill();
     x.beginPath(); x.moveTo(72, 62); x.lineTo(88, 62); x.lineTo(80, 76); x.closePath(); x.fill();
     x.fillStyle = '#fff'; x.font = '900 42px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText(String(n), 80, 32);
@@ -234,7 +239,7 @@
     clearObjects();
     N = 10 + upg.start * 2; lat = 0; targetLat = 0; crowdX = 0;
     traveled = 0; dist = 0; speed = 7; runCoins = 0;
-    genDist = 10; wallPlaced.clear();
+    genDist = 10; wallPlaced.clear(); enemyPlaced.clear(); eLastN = -1;
     mode = 'play';
     $('tap-hint').style.display = '';
     generateUpTo(FAR);
@@ -244,15 +249,19 @@
   // ===== Генерация =====
   function generateUpTo(max) {
     while (genDist < max) {
-      const nearestWall = Math.round(genDist / 70) * 70;
-      if (nearestWall > 0 && Math.abs(genDist - nearestWall) < 9 && !wallPlaced.has(nearestWall)) {
-        wallPlaced.add(nearestWall); spawnWall(nearestWall); genDist = nearestWall + 18;
+      const nw = Math.round(genDist / 80) * 80;            // стены: 80, 160, ...
+      const ne = Math.round((genDist - 40) / 80) * 80 + 40; // враги между: 40, 120, ...
+      if (nw > 0 && Math.abs(genDist - nw) < 9 && !wallPlaced.has(nw)) {
+        wallPlaced.add(nw); spawnWall(nw); genDist = nw + 18;
+      } else if (ne >= 40 && Math.abs(genDist - ne) < 9 && !enemyPlaced.has(ne)) {
+        enemyPlaced.add(ne); spawnEnemy(ne); genDist = ne + 18;
       } else {
         if (Math.random() < 0.7) spawnGate(genDist); else spawnObstacle(genDist);
         genDist += 9 + Math.random() * 6;
       }
     }
   }
+  function spawnEnemy(d) { objects.push({ type: 'enemy', worldZ: d, count: Math.round(8 + d * 0.05) }); }
   function scaledAdd(d) { return Math.max(4, Math.round((6 + d * 0.03) * (0.6 + Math.random() * 0.9))); }
   // Зелёные (выгодные) воротца
   function greenOp(d) {
@@ -322,6 +331,7 @@
 
   function clearObjects() { for (const o of objects) disposeObj(o); objects = []; }
   function disposeObj(o) {
+    if (!o.obj) return;
     scene.remove(o.obj);
     o.obj.traverse && o.obj.traverse((m) => { if (m.geometry) m.geometry.dispose(); });
     if (o.tex) o.tex.dispose();
@@ -354,7 +364,7 @@
     // бег полос
     if (roadMat && roadMat._tex) roadMat._tex.offset.y = -traveled * 0.25;
     // позиции объектов
-    for (const o of objects) o.obj.position.z = o.worldZ - traveled;
+    for (const o of objects) if (o.obj) o.obj.position.z = o.worldZ - traveled;
     updateCrowd(dt);
     updateBurst(dt);
   }
@@ -365,43 +375,54 @@
     _m.makeTranslation(px, py - len * Math.cos(swing), pz - len * Math.sin(swing));
     mesh.setMatrixAt(i, _m);
   }
-  function updateCrowd(dt) {
-    const want = Math.max(0, Math.min(N, CAP));
-    const spread = crowdWidth();
-    const running = mode === 'play';
-    for (let i = 0; i < want; i++) {
+  function poseCrowdSet(set, count, cx, cz, spread, running) {
+    for (let i = 0; i < count; i++) {
       const s = slots[i];
       const run = running ? (t * 13 + s.ph) : s.ph;
       const bob = running ? Math.abs(Math.sin(run)) * 0.07 : 0;
-      const px = crowdX + s.x * spread, pz = s.z * spread, py = bob;
-      const ls = running ? Math.sin(run) * 0.6 : 0;   // ноги
-      const as = running ? Math.sin(run) * 0.5 : 0;   // руки (противофаза)
-      // тень
-      _m.makeTranslation(px, 0.02, pz); parts.shadow.setMatrixAt(i, _m);
-      // торс / шея / голова (смещение в геометрии)
+      const px = cx + s.x * spread, pz = cz + s.z * spread, py = bob;
+      const ls = running ? Math.sin(run) * 0.6 : 0;
+      const as = running ? Math.sin(run) * 0.5 : 0;
+      _m.makeTranslation(px, 0.02, pz); set.shadow.setMatrixAt(i, _m);
       _m.makeTranslation(px, py, pz);
-      parts.torso.setMatrixAt(i, _m); parts.neck.setMatrixAt(i, _m); parts.head.setMatrixAt(i, _m);
-      // ноги + стопы (pivot — бедро)
+      set.torso.setMatrixAt(i, _m); set.neck.setMatrixAt(i, _m); set.head.setMatrixAt(i, _m);
       const hy = py + LEG_LEN;
-      setLimb(parts.legL, i, px - 0.07, hy, pz, ls); setLimb(parts.legR, i, px + 0.07, hy, pz, -ls);
-      ballAt(parts.footL, i, px - 0.07, hy, pz, LEG_LEN, ls); ballAt(parts.footR, i, px + 0.07, hy, pz, LEG_LEN, -ls);
-      // руки + кисти (pivot — плечо)
+      setLimb(set.legL, i, px - 0.07, hy, pz, ls); setLimb(set.legR, i, px + 0.07, hy, pz, -ls);
+      ballAt(set.footL, i, px - 0.07, hy, pz, LEG_LEN, ls); ballAt(set.footR, i, px + 0.07, hy, pz, LEG_LEN, -ls);
       const sy = py + 0.74;
-      setLimb(parts.armL, i, px - 0.12, sy, pz, -as); setLimb(parts.armR, i, px + 0.12, sy, pz, as);
-      ballAt(parts.handL, i, px - 0.12, sy, pz, ARM_LEN, -as); ballAt(parts.handR, i, px + 0.12, sy, pz, ARM_LEN, as);
+      setLimb(set.armL, i, px - 0.12, sy, pz, -as); setLimb(set.armR, i, px + 0.12, sy, pz, as);
+      ballAt(set.handL, i, px - 0.12, sy, pz, ARM_LEN, -as); ballAt(set.handR, i, px + 0.12, sy, pz, ARM_LEN, as);
     }
-    for (const k in parts) { parts[k].count = want; parts[k].instanceMatrix.needsUpdate = true; }
-
-    // пузырь с числом
+    for (const k in set) { set[k].count = count; set[k].instanceMatrix.needsUpdate = true; }
+  }
+  function updateCrowd(dt) {
+    const running = mode === 'play';
+    // игрок
+    const want = Math.max(0, Math.min(N, CAP)), spread = crowdWidth();
+    poseCrowdSet(parts, want, crowdX, 0, spread, running);
     if (countSprite) {
       countSprite.visible = mode !== 'ready' && want > 0;
       countSprite.position.set(crowdX, 1.7 + spread * 0.2, 0.3);
       if (N !== lastShownN) {
-        lastShownN = N;
-        countSprite.material.map.dispose();
-        countSprite.material.map = countTex(Math.max(0, N));
-        countSprite.material.needsUpdate = true;
+        lastShownN = N; countSprite.material.map.dispose();
+        countSprite.material.map = countTex(Math.max(0, N), '#2e86de'); countSprite.material.needsUpdate = true;
       }
+    }
+    // ближайшая вражеская толпа
+    let en = null, enz = 1e9;
+    for (const o of objects) if (o.type === 'enemy' && !o.done) { const z = o.worldZ - traveled; if (z > -1 && z < FAR && z < enz) { enz = z; en = o; } }
+    if (en) {
+      const ec = Math.max(0, Math.min(en.count, CAP));
+      const espread = Math.min(3.2, 0.8 + Math.sqrt(ec) * 0.13);
+      poseCrowdSet(eparts, ec, 0, enz, espread, true);
+      ecountSprite.visible = true; ecountSprite.position.set(0, 1.7 + espread * 0.2, enz + 0.3);
+      if (en.count !== eLastN) {
+        eLastN = en.count; ecountSprite.material.map.dispose();
+        ecountSprite.material.map = countTex(en.count, '#e23b3b'); ecountSprite.material.needsUpdate = true;
+      }
+    } else {
+      for (const k in eparts) { eparts[k].count = 0; eparts[k].instanceMatrix.needsUpdate = true; }
+      ecountSprite.visible = false;
     }
   }
 
@@ -417,6 +438,16 @@
       } else if (o.type === 'wall') {
         N -= o.req; spawnBurst(Math.min(o.req, 36)); if (window.GameAudio) GameAudio.sfx('clear');
         if (N > 0) runCoins += Math.max(1, Math.round(o.req / 2)); else N = 0;
+      } else if (o.type === 'enemy') {
+        // замес: чья толпа больше, тот побеждает
+        if (N > o.count) {
+          N -= o.count; runCoins += Math.max(1, Math.round(o.count / 3));
+          spawnBurstRed(Math.min(o.count, 40), 0.3); spawnBurst(Math.min(o.count, 12));
+          if (window.GameAudio) GameAudio.sfx('clear');
+        } else {
+          N = 0; spawnBurst(40); spawnBurstRed(Math.min(o.count, 40), 0.3);
+          if (window.GameAudio) GameAudio.sfx('fail');
+        }
       }
     }
     for (const o of objects) if (o.worldZ - traveled < -6 && !o._gone) { o._gone = true; disposeObj(o); }
@@ -499,6 +530,7 @@
       state: () => ({ mode, N, dist, coins, runCoins }),
       addCoins: (n) => { coins += n; save(); updateHUD(); },
       forceOver: () => { N = 0; },
+      grow: (n) => { N += (n || 20); updateHUD(); },
       burst: () => spawnBurst(30),
       webgl: () => !!(renderer && renderer.getContext()),
     };
