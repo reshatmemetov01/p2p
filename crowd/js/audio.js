@@ -142,7 +142,7 @@
       }
     },
 
-    // ---- Фоновая музыка (мягкий пентатонический луп) ----
+    // ---- Фоновая музыка (бодрый трек раннера) ----
     startMusic() {
       this.ensure();
       if (!this.ctx || this._schedTimer || !this.on) return;
@@ -155,21 +155,80 @@
     },
     _schedule() {
       if (!this.ctx) return;
-      const STEP = 0.3;
-      const SCALE = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33];
-      const MEL = [0, 2, 3, 4, 3, 2, 0, -1, 1, 3, 4, 5, 4, 2, 1, -1];
-      const BASS = [130.81, 110.00, 87.31, 98.00]; // C Am F G (по тактам)
+      const STEP = 60 / 128 / 4; // шестнадцатые при 128 BPM
       while (this._nextTime < this.ctx.currentTime + 0.25) {
-        const s = this._step % MEL.length;
-        const t = this._nextTime;
-        const m = MEL[s];
-        if (m >= 0) this.tone(SCALE[m], t, 0.26, 'sine', 0.5, this.musicGain);
-        if (s % 4 === 0) {
-          const bar = Math.floor(s / 4) % BASS.length;
-          this.tone(BASS[bar], t, 0.5, 'triangle', 0.6, this.musicGain);
-        }
+        this._playStep(this._step, this._nextTime);
         this._nextTime += STEP;
         this._step++;
+      }
+    },
+
+    // ---- Трек раннера: 6 частей по 4 такта (~45 сек до повтора) ----
+    _noiseBuf() {
+      if (this._nb) return this._nb;
+      const len = this.ctx.sampleRate * 0.3, b = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      return (this._nb = b);
+    },
+    _noise(t, dur, vol, ftype, freq) {
+      const src = this.ctx.createBufferSource(), f = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+      src.buffer = this._noiseBuf(); f.type = ftype; f.frequency.value = freq;
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(this.musicGain); src.start(t); src.stop(t + dur + 0.02);
+    },
+    _kick(t) {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
+      g.gain.setValueAtTime(1.1, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.connect(g); g.connect(this.musicGain); o.start(t); o.stop(t + 0.22);
+    },
+    _playStep(step, t) {
+      const hz = (semi) => 440 * Math.pow(2, semi / 12); // 0 = A4
+      const CH = { Am: [0, 3, 7], F: [-4, 0, 3], C: [3, 7, 10], G: [-2, 2, 5], Em: [-5, -2, 2] };
+      const P1 = ['Am', 'F', 'C', 'G'], P2 = ['F', 'G', 'Em', 'Am'];
+      const L1 = [
+        [[0, 12, 2], [2, 10, 2], [4, 7, 2], [6, 10, 2], [8, 12, 3], [12, 15, 4]],
+        [[0, 12, 2], [2, 10, 2], [4, 8, 2], [6, 7, 2], [8, 8, 3], [12, 3, 4]],
+        [[0, 7, 2], [2, 10, 2], [4, 12, 2], [6, 15, 2], [8, 14, 3], [12, 12, 2], [14, 10, 2]],
+        [[0, 14, 3], [4, 10, 2], [6, 7, 2], [8, 10, 6]],
+      ];
+      const L2 = [
+        [[0, 15, 2], [3, 15, 1], [4, 14, 2], [6, 12, 2], [8, 8, 4], [12, 12, 2], [14, 14, 2]],
+        [[0, 14, 2], [3, 14, 1], [4, 12, 2], [6, 10, 2], [8, 7, 4], [12, 10, 2], [14, 12, 2]],
+        [[0, 12, 2], [2, 10, 2], [4, 7, 2], [6, 10, 2], [8, 14, 4], [12, 12, 4]],
+        [[0, 12, 6], [8, 15, 2], [10, 14, 2], [12, 12, 4]],
+      ];
+      // части: прогрессия, мелодия, что играет
+      const SEC = [
+        { p: P1, lead: null, kick: 1, snare: 0, arp: 1 },
+        { p: P1, lead: L1, kick: 1, snare: 1, arp: 0 },
+        { p: P2, lead: L2, kick: 1, snare: 1, arp: 0 },
+        { p: P1, lead: L1, kick: 1, snare: 1, arp: 1 },
+        { p: P2, lead: null, kick: 0, snare: 0, arp: 1, fill: 1 },
+        { p: P2, lead: L2, kick: 1, snare: 1, arp: 1 },
+      ];
+      const s16 = step % 16, bar = Math.floor(step / 16), sec = SEC[Math.floor(bar / 4) % SEC.length], b4 = bar % 4;
+      const chord = CH[sec.p[b4]], root = chord[0] < -3 ? chord[0] : chord[0] - 12;
+      const STEP = 60 / 128 / 4, m = this.musicGain;
+      // барабаны
+      if (sec.kick && s16 % 4 === 0) this._kick(t);
+      if (!sec.kick && s16 === 0 && b4 === 0) this._kick(t);
+      if (s16 % 4 === 2) this._noise(t, 0.05, 0.35, 'highpass', 7000);
+      else if (sec.kick && s16 % 2 === 1) this._noise(t, 0.025, 0.12, 'highpass', 8000);
+      if (sec.snare && (s16 === 4 || s16 === 12)) { this._noise(t, 0.14, 0.5, 'bandpass', 1800); this.tone(190, t, 0.08, 'triangle', 0.35, m); }
+      if (sec.fill && b4 === 3 && s16 >= 8) this._noise(t, 0.08, 0.2 + (s16 - 8) * 0.05, 'bandpass', 1500 + s16 * 60);
+      // бас восьмыми: корень / октава
+      if (s16 % 2 === 0) this.tone(hz(root - 12 + (s16 % 4 === 2 ? 12 : 0)), t, STEP * 1.8, 'triangle', 0.75, m);
+      // арпеджио
+      if (sec.arp) this.tone(hz(chord[s16 % 3] + 12 * (s16 % 6 < 3 ? 0 : 1)), t, STEP * 0.9, 'sine', 0.22, m);
+      // мелодия
+      if (sec.lead) {
+        const n = sec.lead[b4].find((x) => x[0] === s16);
+        if (n) {
+          const d = n[2] * STEP * 0.95;
+          this.tone(hz(n[1]), t, d, 'square', 0.16, m);
+          this.tone(hz(n[1] + 12), t, d * 0.7, 'sine', 0.12, m);
+        }
       }
     },
   };
