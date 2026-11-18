@@ -19,13 +19,13 @@
       next: 'Next delivery ▶', retry: 'Retry', paused: 'Paused', resume: 'Resume', restart: 'Restart level', rotate: 'Rotate your device',
       delivered: 'Delivered!', crushed: 'Parcel crushed!', crushedText: 'A car ran over your parcel…', fell: 'Parcel lost!', fellText: 'Your parcel fell into a manhole…',
       double: 'Double coins (watch ad)', winText: (c, t) => 'Coins: +' + c + ' · Time: ' + t + 's',
-      eagleWarn: '🦅 Eagle! Move away!', eagleStole: '🦅 The eagle stole your parcel!', dogBit: '🐕 The dog grabbed your parcel!', slip: '🍌 Oops! Banana peel!', splash: '💦 Splash!', dogChase: '🐕 Run! Jump on something!' },
+      pickup: '📦 Pick up the parcel! Follow the red arrow', eagleWarn: '🦅 Eagle! Move away!', eagleStole: '🦅 The eagle stole your parcel!', dogBit: '🐕 The dog grabbed your parcel!', slip: '🍌 Oops! Banana peel!', splash: '💦 Splash!', dogChase: '🐕 Run! Jump on something!' },
     ru: { level: 'Уровень', loading: 'Загрузка…', play: 'Играть!', intro: 'Доставь посылку через безумный город! Берегись машин и открытых люков.',
       ctrl: 'Слева — движение · Кнопка справа — прыжок · ПК: WASD + Пробел', dropped: 'Посылка упала! Подбери её!', cont: 'Продолжить за рекламу',
       next: 'Следующая доставка ▶', retry: 'Заново', paused: 'Пауза', resume: 'Продолжить', restart: 'Начать уровень заново', rotate: 'Поверни телефон',
       delivered: 'Доставлено!', crushed: 'Посылку раздавили!', crushedText: 'Машина переехала посылку…', fell: 'Посылка потеряна!', fellText: 'Посылка упала в люк…',
       double: 'Удвоить монеты (реклама)', winText: (c, t) => 'Монеты: +' + c + ' · Время: ' + t + ' с',
-      eagleWarn: '🦅 Орёл! Уходи с тени!', eagleStole: '🦅 Орёл украл посылку!', dogBit: '🐕 Собака выбила посылку!', slip: '🍌 Ой! Банановая кожура!', splash: '💦 Окатило водой!', dogChase: '🐕 Беги! Запрыгни повыше!' },
+      pickup: '📦 Подними посылку! Беги по красной стрелке', eagleWarn: '🦅 Орёл! Уходи с тени!', eagleStole: '🦅 Орёл украл посылку!', dogBit: '🐕 Собака выбила посылку!', slip: '🍌 Ой! Банановая кожура!', splash: '💦 Окатило водой!', dogChase: '🐕 Беги! Запрыгни повыше!' },
   };
   const RU_LANGS = ['ru', 'be', 'uk', 'kk', 'uz', 'ky', 'tg', 'hy', 'az', 'tt'];
   let L = TEXTS.en;
@@ -522,6 +522,10 @@
     if (mode === 'dead') { deadT -= dt; if (deadT <= 0) { mode = 'play'; resetPlayerAt(safePos); player.ch.root.visible = true; } }
     updateFx(dt); updateCamera(dt); updateFade();
     if (alertT > 0) { alertT -= dt; if (alertT <= 0) $('parcel-alert').classList.add('hidden'); }
+    // постоянная подсказка, пока посылка не в руках
+    { const a = $('parcel-alert'), need = mode === 'play' && (parcel.state === 'free' || parcel.state === 'eagle') && alertT <= 0;
+      if (need) { if (a.textContent !== L.pickup) a.textContent = L.pickup; a.classList.remove('hidden'); a.classList.add('pick'); }
+      else if (a.classList.contains('pick')) { a.classList.remove('pick'); if (alertT <= 0) a.classList.add('hidden'); } }
     // HUD: расстояние до адреса
     const lostP = parcel.state === 'free' || parcel.state === 'eagle'; const src = lostP ? parcel.pos : player.pos;
     $('dist').textContent = Math.round(Math.hypot(target.x - src.x, target.z - src.z) / 1.1) + ' m';
@@ -582,7 +586,7 @@
     if (b.pickCd > 0) b.pickCd -= dt;
     if (mode === 'play' && stun <= 0 && b.pickCd <= 0) {
       const dx = b.pos.x - player.pos.x, dz = b.pos.z - player.pos.z, dy = b.pos.y - player.pos.y;
-      if (dx * dx + dz * dz < 0.8 && dy > -0.6 && dy < 1.2) { b.state = 'carried'; carrying = true; $('parcel-alert').classList.add('hidden'); alertT = 0; if (window.GameAudio) GameAudio.sfx('perfect'); }
+      if (dx * dx + dz * dz < 0.8 && dy > -0.6 && dy < 1.2) { b.state = 'carried'; carrying = true; $('parcel-alert').classList.add('hidden'); $('parcel-alert').classList.remove('pick'); alertT = 0; if (window.GameAudio) GameAudio.sfx('perfect'); }
     }
     if (b.pos.y < GROUND - 2.5 && b.state === 'free') { b.state = 'lost'; b.mesh.visible = false; lose('fell'); }
   }
@@ -657,7 +661,7 @@
   }
   const ray = new T.Ray();
   function updateFade() {
-    if (!player) return;
+    if (!player || window.__ts === 0) return;
     const p = tmpV2.set(player.pos.x, player.pos.y + 0.8, player.pos.z);
     ray.origin.copy(camera.position); ray.direction.subVectors(p, camera.position); const dist = ray.direction.length(); ray.direction.normalize();
     for (const b of blocks) {
@@ -745,6 +749,17 @@
         if (kind === 'dog') { const d = dogs[0]; player.pos.set(d.home.x + d.side[1] * 5.5, GROUND + 0.1, d.home.z - d.side[0] * 5.5); return [d.home.x, d.home.z]; }
         if (kind === 'banana') { const bn = bananas.find((b) => b.on); const v = bn.vertical; player.pos.set(bn.g.position.x - (v ? 0 : 3), bn.g.position.y + 0.1, bn.g.position.z - (v ? 3 : 0)); return v ? [0, 1] : [-1, 0]; }
         if (kind === 'jet') { const j = jets[0]; j.t = 3.05; player.pos.set(j.x + j.dir.x * 2.5, WALK + 0.1, j.z + j.dir.z * 2.5); return [j.x, j.z]; }
+      },
+      poster: (c) => {
+        window.__ts = 0; mode = 'play';
+        player.pos.set(c.p[0], WALK, c.p[1]); player.yaw = c.p[2]; player.ch.root.position.copy(player.pos); player.ch.root.rotation.y = player.yaw;
+        play(player.ch, c.anim || 'Running_A', 0); player.ch.mixer.update(c.at || 0.35); if (c.carry !== false) { parcel.state = 'carried'; carrying = true; carryPose(player.ch); updateParcel(0); parcel.mesh.visible = true; } else { carrying = false; parcel.state = 'free'; parcel.mesh.position.set(c.box[0], c.box[1], c.box[2]); parcel.mesh.rotation.set(0.5, 0.7, 0.3); }
+        if (c.dog && dogs[0]) { const d = dogs[0]; d.body.pos.set(c.dog[0], WALK, c.dog[1]); d.obj.position.copy(d.body.pos); d.obj.rotation.y = c.dog[2] - Math.PI / 2; setDogAnim(d, 'walk'); d.mixer.update(0.4); }
+        if (c.eagle) { eagle.g.visible = true; eagle.g.position.set(c.eagle[0], c.eagle[1], c.eagle[2]); eagle.g.lookAt(c.eagle[3], c.eagle[4], c.eagle[5]); eagle.wings.forEach((w, i) => { w.rotation.z = (i ? -1 : 1) * 0.55; }); eagle.shadow.visible = !!c.shadow; if (c.shadow) { eagle.shadow.position.set(c.shadow[0], WALK + 0.06, c.shadow[1]); eagle.shadow.material.color.setHex(0xff2020); } }
+        if (c.cars) c.cars.forEach((q, i) => { const k = cars[i]; k.ax = q[0]; k.line = q[1]; k.s = q[2]; k.dir = q[3]; k.v = 0; const o = k.obj; if (k.ax === 'x') { o.position.set(k.s, GROUND + 0.06 * S, k.line); o.rotation.y = k.dir > 0 ? Math.PI / 2 : -Math.PI / 2; } else { o.position.set(k.line, GROUND + 0.06 * S, k.s); o.rotation.y = k.dir > 0 ? 0 : Math.PI; } });
+        gps.visible = false; scene.remove(gps); ring.visible = !!c.ring; marker.visible = !!c.ring; window.__camLock = c.cam; updateCamera(0);
+        blocks.forEach((b) => { b.faded = false; b.mesh.traverse((m) => { if (m.isMesh) m.material = cityMat; }); });
+        if (c.slip) { const bn = bananas[0]; if (bn) { bn.g.position.set(c.slip[0], GROUND + 0.05, c.slip[1]); bn.g.visible = true; } }
       },
       toTarget: () => { player.pos.set(target.x + targetFwd[0] * 3, WALK + 0.2, target.z + targetFwd[1] * 3); return targetFwd; }, carry: CARRY, setLevel: (n) => { save.level = n; },
     };

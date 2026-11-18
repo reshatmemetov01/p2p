@@ -21,6 +21,8 @@ html, body { height: 100%; overflow: hidden; background: #8fd3ff; color: #fff; u
 .dist-pill { background: rgba(20,30,70,.5); padding: 7px 16px; border-radius: 14px; font-weight: 900; font-size: 18px; }
 .coins { display: flex; align-items: center; gap: 6px; background: rgba(20,30,70,.45); padding: 7px 14px; border-radius: 14px; font-weight: 900; font-size: 18px; }
 .coins i { font-style: normal; color: #5ec8ff; text-shadow: 0 0 6px #5ec8ff; }
+.parcel-alert.pick { background: #ff8a1f; box-shadow: 0 4px 0 #a8520a; animation: pulseA 1s ease-in-out infinite; }
+@keyframes pulseA { 50% { transform: translateX(-50%) scale(1.05); } }
 .parcel-alert { position: absolute; top: calc(66px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 5;
   background: #ff4f6a; padding: 8px 18px; border-radius: 14px; font-weight: 900; font-size: 17px; box-shadow: 0 4px 0 #a8203a; animation: shake .4s; }
 @keyframes shake { 20% { transform: translateX(calc(-50% - 6px)); } 60% { transform: translateX(calc(-50% + 6px)); } }
