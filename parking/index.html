@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Parking Escape</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Меню -->
+    <div id="menu" class="screen-full">
+      <button class="sound-btn" id="sound-btn">🔊</button>
+      <div class="logo">
+        <div class="logo-car"></div>
+        <h1 class="logo-t1" data-i18n="title1">PARKING</h1>
+        <div class="logo-t2" data-i18n="title2">ESCAPE</div>
+      </div>
+      <div class="diff-list">
+        <button class="diff easy" data-d="easy"><span class="dn" data-i18n="easy">Easy</span><span class="dl" id="lv-easy">Level 1</span></button>
+        <button class="diff medium" data-d="medium"><span class="dn" data-i18n="medium">Medium</span><span class="dl" id="lv-medium">Level 1</span></button>
+        <button class="diff hard" data-d="hard"><span class="dn" data-i18n="hard">Hard</span><span class="dl" id="lv-hard">Level 1</span></button>
+      </div>
+      <p class="menu-hint" data-i18n="howto">Slide the cars to free the way for the red car!</p>
+    </div>
+
+    <!-- Игра -->
+    <div id="game" class="screen-full hidden">
+      <div class="top">
+        <button class="round-btn" id="btn-back" aria-label="menu">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="title-box">
+          <div class="pill" id="diff-pill">EASY</div>
+          <div class="lvl-title" id="lvl-title">Level 1</div>
+        </div>
+        <button class="round-btn" id="btn-restart" aria-label="restart">
+          <svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2.1-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M5 3v5h5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="moves"><span data-i18n="moves">Moves</span>: <b id="moves">0</b> <span class="best">· <span data-i18n="best">Best</span>: <b id="best">0</b></span></div>
+      <div class="board-wrap"><div id="board"></div></div>
+      <div class="bottom">
+        <button class="round-btn dark" id="btn-undo" aria-label="undo">
+          <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10a6 6 0 0 1 0 12h-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        </button>
+        <button class="hint-btn" id="btn-hint" aria-label="hint">
+          <svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z" fill="#fff" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          <span class="ad-badge" id="hint-badge">AD</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Победа -->
+    <div id="win" class="overlay hidden">
+      <div class="card">
+        <div class="stars" id="stars"><span>★</span><span>★</span><span>★</span></div>
+        <h2 data-i18n="done">Level complete!</h2>
+        <p class="win-info" id="win-info"></p>
+        <button class="btn btn-main" id="btn-next" data-i18n="next">Next ▶</button>
+        <button class="btn btn-ghost" id="btn-replay" data-i18n="replay">Replay</button>
+      </div>
+    </div>
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="https://bridge.playgama.com/v2/stable/playgama-bridge.js"></script>
+  <script src="js/bridge-sdk.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
