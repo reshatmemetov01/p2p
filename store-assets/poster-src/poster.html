@@ -1,0 +1,74 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden}
+#bg{position:absolute;inset:0;background:radial-gradient(circle at var(--cx) var(--cy),#fff6c8 0,#ffd23b 18%,#ff9d1c 60%,#ff6a1c 100%)}
+#rays{position:absolute;inset:-50%;background:repeating-conic-gradient(from 0deg at calc(50% + (var(--cxn) - 50%)/2) calc(50% + (var(--cyn) - 50%)/2),rgba(255,255,255,.28) 0deg 7deg,rgba(255,255,255,0) 7deg 15deg)}
+canvas{position:absolute;inset:0}
+.lbl{position:absolute;transform:translate(-50%,-100%);font:900 var(--fs) 'Arial Black',Arial,sans-serif;color:#fff;padding:.08em .5em .12em;border-radius:.45em;
+ box-shadow:0 .12em 0 rgba(0,0,0,.25);letter-spacing:.02em}
+.lbl:after{content:'';position:absolute;left:50%;bottom:-.28em;transform:translateX(-50%);border:.3em solid transparent;border-bottom:0;border-top-color:inherit}
+.b{background:#1f8bff;border-color:#1f8bff;color:#fff}.r{background:#ff3b3b;border-color:#ff3b3b}
+#title{position:absolute;text-align:center;line-height:.92;font-family:'Arial Black',Arial,sans-serif;font-weight:900}
+#title .t1{display:block;color:#ffe14d;-webkit-text-stroke:var(--st) #3a1d7a;paint-order:stroke fill;text-shadow:0 var(--sh) 0 #3a1d7a}
+#title .t2{display:inline-block;margin-top:.12em;color:#fff;background:linear-gradient(#ff4d6d,#e0234a);padding:.02em .35em .08em;border-radius:.18em;
+ box-shadow:0 var(--sh) 0 #8a1030;-webkit-text-stroke:calc(var(--st)*.5) #8a1030;paint-order:stroke fill;transform:rotate(-3deg)}
+#tag{position:absolute;font:900 var(--tfs) Arial,sans-serif;color:#fff;-webkit-text-stroke:calc(var(--tfs)*.12) #3a1d7a;paint-order:stroke fill;text-shadow:0 .08em 0 #3a1d7a}
+</style></head><body>
+<div id="bg"></div><div id="rays"></div><canvas id="c"></canvas><div id="ov"></div>
+<script src="../../crowd/js/three.min.js"></script><script src="../../crowd/js/GLTFLoader.js"></script><script src="../../crowd/js/SkeletonUtils.js"></script>
+<script>
+const T=THREE, Q=new URLSearchParams(location.search), W=innerWidth, H=innerHeight, P=Q.get('p')||'land';
+let seed=7; const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};
+const cfg={
+ land:{cam:[1.0,6.6,10.5],look:[-1.8,0.6,0],fov:41,sh:[0.16,0.08],cx:'25%',cy:'40%',title:{l:'3%',t:'14%',w:'38%',fs:180,tag:'Grow your crowd.<br>Crush the red army!',tl:'4.5%',tt:'70%',tfs:58}},
+ sq:{cam:[1.0,7.0,10.5],look:[-1.8,0.6,0],fov:47,sh:[0,0.17],cx:'50%',cy:'18%',title:{l:'0',t:'3%',w:'100%',fs:122}},
+ port:{cam:[-13.5,9.5,0.01],look:[-1.0,0.2,0],fov:50,sh:[0,0.13],cx:'50%',cy:'15%',title:{l:'0',t:'5%',w:'100%',fs:190,tag:'Grow your crowd.<br>Crush the red army!',tl:'0',tt:'89%',tfs:60,tc:1}},
+}[P];
+document.documentElement.style.setProperty('--cx',cfg.cx);document.documentElement.style.setProperty('--cy',cfg.cy);
+document.documentElement.style.setProperty('--cxn',cfg.cx);document.documentElement.style.setProperty('--cyn',cfg.cy);
+const R=new T.WebGLRenderer({canvas:c,antialias:true,alpha:true,preserveDrawingBuffer:true});R.setSize(W,H);R.setPixelRatio(1);R.setClearColor(0,0);
+const S=new T.Scene(), cam=new T.PerspectiveCamera(cfg.fov,W/H,0.1,200);cam.position.set(...cfg.cam);cam.lookAt(...cfg.look);cam.setViewOffset(W,H,-cfg.sh[0]*W,-cfg.sh[1]*H,W,H);
+S.add(new T.HemisphereLight(0xffffff,0x8070c0,0.95));const dl=new T.DirectionalLight(0xffffff,0.75);dl.position.set(-4,10,6);S.add(dl);
+// дорога вдоль X
+function tex(w,h,f){const cv=document.createElement('canvas');cv.width=w;cv.height=h;f(cv.getContext('2d'));const t=new T.CanvasTexture(cv);t.anisotropy=8;return t;}
+const rt=tex(256,256,x=>{x.fillStyle='#5b4fb8';x.fillRect(0,0,256,256);x.fillStyle='#5146a8';x.beginPath();x.moveTo(0,0);x.lineTo(128,90);x.lineTo(256,0);x.lineTo(256,60);x.lineTo(128,150);x.lineTo(0,60);x.fill();});
+rt.wrapS=rt.wrapT=T.RepeatWrapping;rt.repeat.set(1,22);
+const road=new T.Mesh(new T.PlaneGeometry(7,60),new T.MeshLambertMaterial({map:rt}));road.rotation.x=-Math.PI/2;road.rotation.z=Math.PI/2;S.add(road);
+for(const z of[-3.7,3.7]){const cb=new T.Mesh(new T.BoxGeometry(60,0.4,0.5),new T.MeshLambertMaterial({color:0xffffff}));cb.position.set(0,0.1,z);S.add(cb);}
+// кляксы
+const sp=tex(128,128,x=>{x.fillStyle='#fff';x.beginPath();x.arc(64,64,30,0,6.3);x.fill();for(let i=0;i<11;i++){const a=i*.57+.3,d=34+(i%3)*12,r=6+(i%4)*4;x.beginPath();x.arc(64+Math.cos(a)*d,64+Math.sin(a)*d,r,0,6.3);x.fill();}});
+function splat(px,pz,col,k){const m=new T.Mesh(new T.PlaneGeometry(k,k),new T.MeshBasicMaterial({map:sp,color:col,transparent:true,depthWrite:false}));m.rotation.x=-Math.PI/2;m.rotation.z=rnd()*6;m.position.set(px,0.02,pz);S.add(m);}
+const BLUE=0x1f7bff, RED=0xf02a2a;
+for(let i=0;i<9;i++)splat(-0.6+rnd()*1.6,(rnd()-.5)*4,i%2?RED:BLUE,0.9+rnd()*0.9);
+new T.GLTFLoader().load('../../crowd/assets/char.glb',g=>{
+ const tmpl=g.scene, clips={};g.animations.forEach(a=>clips[a.name]=a);
+ const box=new T.Box3().setFromObject(tmpl), k=1/(box.max.y-box.min.y);
+ const mB=new T.MeshLambertMaterial({color:BLUE,skinning:true,emissive:0x0b2d80,emissiveIntensity:.25});
+ const mR=new T.MeshLambertMaterial({color:RED,skinning:true,emissive:0x6a0d0d,emissiveIntensity:.25});
+ function ch(mat,x,z,ry,clip,t,dead){const r=T.SkeletonUtils.clone(tmpl);r.traverse(m=>{if(m.isSkinnedMesh){m.material=mat;m.frustumCulled=false;}else if(m.isMesh&&m.name==='Crossbow')m.visible=false;});
+  r.scale.setScalar(k);r.position.set(x,0,z);r.rotation.y=ry;S.add(r);const mx=new T.AnimationMixer(r);const a=mx.clipAction(clips[clip]);if(dead){a.setLoop(T.LoopOnce);a.clampWhenFinished=true;}a.play();mx.update(t);return r;}
+ // синие: плотный клин, бегут вправо (+x)
+ const blue=[],red=[];
+ for(let i=0;i<95;i++){let x,z;do{x=-0.7-Math.pow(rnd(),0.8)*5.8;z=(rnd()-.5)*6.2;}while(Math.abs(z)>(x+7.5)*0.62||Math.abs(z)>3.1);
+  if(blue.some(b=>Math.hypot(b[0]-x,b[1]-z)<0.42)){i--;continue;}blue.push([x,z]);}
+ for(let i=0;i<32;i++){let x,z;do{x=0.7+Math.pow(rnd(),0.9)*2.6;z=(rnd()-.5)*4.4;}while(Math.abs(z)>2.2);
+  if(red.some(b=>Math.hypot(b[0]-x,b[1]-z)<0.42)){i--;continue;}red.push([x,z]);}
+ blue.forEach(([x,z])=>ch(mB,x,z,Math.PI/2+(rnd()-.5)*.4,x>-1.6?'Unarmed_Melee_Attack_Punch_A':'Running_A',rnd()*2));
+ red.forEach(([x,z])=>ch(mR,x,z,-Math.PI/2+(rnd()-.5)*.4,x<1.5?'Unarmed_Melee_Attack_Punch_A':'Running_A',rnd()*2));
+ // кусочки
+ const cg=new T.BoxGeometry(.16,.16,.16);
+ for(let i=0;i<70;i++){const m=new T.Mesh(cg,new T.MeshLambertMaterial({color:i%2?RED:BLUE,emissive:i%2?0x551010:0x0a2a66}));const a=rnd()*6.28,d=Math.pow(rnd(),.7)*2.6;
+  m.position.set(Math.cos(a)*d*0.7+0.1,0.3+rnd()*3.0,Math.sin(a)*d);m.rotation.set(rnd()*6,rnd()*6,0);const s=0.6+rnd()*1.2;m.scale.setScalar(s);S.add(m);}
+ R.render(S,cam);
+ // подписи
+ const toS=(x,y,z)=>{const v=new T.Vector3(x,y,z).project(cam);return[(v.x+1)/2*W,(1-v.y)/2*H];};
+ const fs=Math.round(Math.min(W,H)*(P==='land'?0.075:0.085));
+ const L=(cls,txt,p)=>{const d=document.createElement('div');d.className='lbl '+cls;d.textContent=txt;d.style.setProperty('--fs',fs+'px');d.style.left=p[0]+'px';d.style.top=p[1]+'px';ov.appendChild(d);};
+ L('b','250',toS(-3.6,1.9,0));L('r','32',toS(2.2,1.75,0));
+ const tt=cfg.title;
+ const td=document.createElement('div');td.id='title';Object.assign(td.style,{left:tt.l,top:tt.t,width:tt.w,fontSize:tt.fs+'px'});td.style.setProperty('--st',Math.round(tt.fs*.07)+'px');td.style.setProperty('--sh',Math.round(tt.fs*.06)+'px');
+ td.innerHTML='<span class="t1">CROWD</span><span class="t2">RUSH</span>';ov.appendChild(td);
+ if(tt.tag){const g=document.createElement('div');g.id='tag';g.innerHTML=tt.tag;Object.assign(g.style,{left:tt.tl,top:tt.tt});g.style.setProperty('--tfs',tt.tfs+'px');if(tt.tc){g.style.width='100%';g.style.textAlign='center';}ov.appendChild(g);}
+ window.DONE=true;
+});
+</script></body></html>
