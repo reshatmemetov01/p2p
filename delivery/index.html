@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Crazy Delivery</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <div class="hud" id="hud">
+      <div class="hud-left">
+        <button class="icon-btn" id="btn-pause" aria-label="pause">⏸</button>
+        <div class="lvl-pill"><span data-i18n="level">Level</span> <b id="lvl">1</b></div>
+      </div>
+      <div class="hud-mid"><div class="pbar"><div class="pfill" id="prog"></div><div class="pbox" id="pbox">📦</div></div></div>
+      <div class="hud-right"><div class="coins"><span id="coins">0</span><i>◆</i></div></div>
+    </div>
+    <div class="parcel-alert hidden" id="parcel-alert" data-i18n="dropped">Parcel dropped! Pick it up!</div>
+
+    <div class="joy hidden" id="joy"><div class="joy-knob" id="joy-knob"></div></div>
+    <button class="jump-btn" id="btn-jump" aria-label="jump"><svg viewBox="0 0 24 24"><path d="M12 4l7 8h-4v8H9v-8H5z" fill="#fff"/></svg></button>
+
+    <div id="start" class="screen">
+      <div class="card">
+        <div class="logo"><div class="l1">CRAZY</div><div class="l2">DELIVERY</div></div>
+        <p class="sub" data-i18n="intro">Deliver the parcel through total chaos! Don't drop it into the lava.</p>
+        <button class="btn btn-main" id="btn-play" disabled data-i18n="loading">Loading…</button>
+        <p class="ctrl" data-i18n="ctrl">Left side: move · Right button: jump · PC: WASD + Space</p>
+      </div>
+    </div>
+
+    <div id="end" class="screen hidden">
+      <div class="card">
+        <div class="big" id="end-emoji">🎉</div>
+        <h2 id="end-title">Delivered!</h2>
+        <p class="sub" id="end-text"></p>
+        <button class="btn btn-reward hidden" id="btn-continue"><span>▶</span> <span data-i18n="cont">Continue (watch ad)</span></button>
+        <button class="btn btn-main" id="btn-next" data-i18n="next">Next level ▶</button>
+        <button class="btn btn-ghost" id="btn-retry" data-i18n="retry">Retry</button>
+      </div>
+    </div>
+
+    <div id="pause" class="screen hidden">
+      <div class="card">
+        <h2 data-i18n="paused">Paused</h2>
+        <button class="btn btn-main" id="btn-resume" data-i18n="resume">Resume</button>
+        <button class="btn btn-ghost" id="btn-restart" data-i18n="restart">Restart level</button>
+        <button class="sound-btn" id="sound-btn">🔊</button>
+      </div>
+    </div>
+
+    <div id="rotate" class="rotate hidden">
+      <div class="phone"></div>
+      <p data-i18n="rotate">Rotate your device</p>
+    </div>
+  </div>
+
+  <script src="js/three.min.js"></script>
+  <script src="js/GLTFLoader.js"></script>
+  <script src="js/SkeletonUtils.js"></script>
+  <script src="https://bridge.playgama.com/v2/stable/playgama-bridge.js"></script>
+  <script src="js/bridge-sdk.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
