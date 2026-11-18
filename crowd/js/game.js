@@ -9,6 +9,41 @@
   'use strict';
   const T = window.THREE;
 
+  // ---- Языки: английский по умолчанию, русский для русскоязычных ----
+  const TEXTS = {
+    en: {
+      title: 'CROWD RUSH', hint: 'Drag left and right', loading: 'Loading…', loadErr: 'Loading error', play: 'Play!',
+      intro: 'Lead your crowd with your finger. Pick the best gates, avoid pits, beat the red crowds and reach the finish stairs!',
+      fallen: 'Crowd lost!', passed: 'Progress', runCoins: 'Coins this run', revive: 'Continue (watch ad)',
+      x2: 'Double coins', upgrades: '🔧 Upgrades', again: 'Retry', next: 'Next ▶', levelDone: (l) => 'Level ' + l + ' complete!',
+      mult: 'Multiplier', reward: 'Reward', shop: '🔧 Upgrades', done: 'Done',
+      upStart: '👥 Starting crowd', upIncome: '💰 Income', inStart: ' at start', coinsPct: '% coins', lvl: 'Lv.', max: 'MAX', sound: 'Sound',
+    },
+    ru: {
+      title: 'ТОЛПА', hint: 'Веди пальцем влево-вправо', loading: 'Загрузка…', loadErr: 'Ошибка загрузки', play: 'В бой!',
+      intro: 'Веди толпу пальцем. Выбирай выгодные воротца, обходи пропасти, побеждай красные толпы и добеги до финишной лестницы!',
+      fallen: 'Толпа пала!', passed: 'Пройдено', runCoins: 'Монеты за забег', revive: 'Продолжить за рекламу',
+      x2: 'Удвоить монеты', upgrades: '🔧 Прокачка', again: 'Заново', next: 'Дальше ▶', levelDone: (l) => 'Уровень ' + l + ' пройден!',
+      mult: 'Множитель', reward: 'Награда', shop: '🔧 Прокачка', done: 'Готово',
+      upStart: '👥 Стартовая толпа', upIncome: '💰 Доход', inStart: ' в старте', coinsPct: '% монет', lvl: 'Ур.', max: 'МАКС', sound: 'Звук',
+    },
+  };
+  const RU_LANGS = ['ru', 'be', 'uk', 'kk', 'uz', 'ky', 'tg', 'hy', 'az', 'tt'];
+  let L = TEXTS.en;
+  function detectLang() {
+    let code = '';
+    try { code = (window.bridge && bridge.platform && bridge.platform.language) || ''; } catch (e) {}
+    if (!code) code = (navigator.language || 'en');
+    code = String(code).toLowerCase().slice(0, 2);
+    L = RU_LANGS.indexOf(code) >= 0 ? TEXTS.ru : TEXTS.en;
+    document.documentElement.lang = L === TEXTS.ru ? 'ru' : 'en';
+    document.title = L === TEXTS.ru ? 'Толпа' : 'Crowd Rush';
+    document.querySelectorAll('[data-i18n]').forEach((el) => {
+      const v = L[el.getAttribute('data-i18n')];
+      if (typeof v === 'string') { if (el.hasAttribute('data-i18n-title')) el.title = v; else el.textContent = v; }
+    });
+  }
+
   // ---- Константы ----
   const SAVE_KEY = 'crowd3d_save_v2';
   const ROAD_W = 7.2, ROAD_HALF = ROAD_W / 2;
@@ -124,10 +159,10 @@
       for (let i = 0; i < ECAP; i++) enemies.push(makeChar(matRed));
       for (let i = 0; i < FCAP; i++) fallers.push({ ch: makeChar(matBlue), life: 0, x: 0, y: 0, wz: 0, vy: 0, rot: 0 });
       loaded = true;
-      const b = $('btn-start'); b.disabled = false; b.textContent = 'В бой!';
+      const b = $('btn-start'); b.disabled = false; b.textContent = L.play;
       resetCrowdIdle();
     };
-    const onErr = (e) => { console.error('model load failed', e); $('btn-start').textContent = 'Ошибка загрузки'; };
+    const onErr = (e) => { console.error('model load failed', e); $('btn-start').textContent = L.loadErr; };
     if (window.CHAR_GLB_B64) { // запасной вариант для превью: модель встроена в js
       const bin = atob(window.CHAR_GLB_B64), buf = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
@@ -629,11 +664,11 @@
     runCoins += bonus; coins += runCoins; if (dist > bestDist) bestDist = dist; save();
     const end = $('end');
     end.querySelector('.big-emoji').textContent = '💀';
-    end.querySelector('h1').textContent = 'Толпа пала!';
-    end.querySelector('.stats').innerHTML = '<div>Пройдено: <b>' + Math.min(100, Math.round(traveled / FINISH * 100)) + '%</b></div><div>Монеты за забег: <b id="end-coins">' + runCoins + '</b> 🪙</div>';
+    end.querySelector('h1').textContent = L.fallen;
+    end.querySelector('.stats').innerHTML = '<div>' + L.passed + ': <b>' + Math.min(100, Math.round(traveled / FINISH * 100)) + '%</b></div><div>' + L.runCoins + ': <b id="end-coins">' + runCoins + '</b> 🪙</div>';
     $('btn-revive').style.display = ''; $('btn-revive').onclick = revive;
     $('btn-x2').style.display = ''; $('btn-x2').disabled = false; $('btn-x2').style.opacity = 1; $('btn-x2').onclick = doubleCoins;
-    $('btn-again').textContent = 'Заново'; $('btn-again').onclick = () => { $('end').classList.add('hidden'); maybeInterstitial(startRun); };
+    $('btn-again').textContent = L.again; $('btn-again').onclick = () => { $('end').classList.add('hidden'); maybeInterstitial(startRun); };
     $('tap-hint').style.display = 'none';
     setTimeout(() => end.classList.remove('hidden'), 700);
     if (window.GameAudio) GameAudio.sfx('fail');
@@ -642,15 +677,15 @@
     coins += finaleReward; save();
     const end = $('end');
     end.querySelector('.big-emoji').textContent = '🏆';
-    end.querySelector('h1').textContent = 'Уровень ' + level + ' пройден!';
-    end.querySelector('.stats').innerHTML = '<div>Множитель: <b>x' + finaleMult + '</b></div><div>Награда: <b id="end-coins">' + finaleReward + '</b> 🪙</div>';
+    end.querySelector('h1').textContent = L.levelDone(level);
+    end.querySelector('.stats').innerHTML = '<div>' + L.mult + ': <b>x' + finaleMult + '</b></div><div>' + L.reward + ': <b id="end-coins">' + finaleReward + '</b> 🪙</div>';
     $('btn-revive').style.display = 'none';
     $('btn-x2').style.display = ''; $('btn-x2').disabled = false; $('btn-x2').style.opacity = 1;
     $('btn-x2').onclick = () => window.YSDK.showRewarded(() => {
       coins += finaleReward; $('end-coins').textContent = finaleReward * 2; $('btn-x2').disabled = true; $('btn-x2').style.opacity = 0.5; save();
       if (window.GameAudio) GameAudio.sfx('coin');
     });
-    $('btn-again').textContent = 'Дальше ▶'; $('btn-again').onclick = () => { level++; save(); $('end').classList.add('hidden'); maybeInterstitial(startRun); };
+    $('btn-again').textContent = L.next; $('btn-again').onclick = () => { level++; save(); $('end').classList.add('hidden'); maybeInterstitial(startRun); };
     end.classList.remove('hidden');
   }
   function hideScreens() { ['start', 'end', 'shop'].forEach((id) => $(id).classList.add('hidden')); }
@@ -662,16 +697,16 @@
     $('coins').textContent = coins + runCoins;
   }
   const UPG_DEF = {
-    start: { name: '👥 Стартовая толпа', max: 10, cost: (l) => 60 + l * 70, desc: (l) => '+' + (l * 2) + ' в старте' },
-    income: { name: '💰 Доход', max: 5, cost: (l) => 100 + l * 120, desc: (l) => '+' + (l * 50) + '% монет' },
+    start: { name: () => L.upStart, max: 10, cost: (l) => 60 + l * 70, desc: (l) => '+' + (l * 2) + L.inStart },
+    income: { name: () => L.upIncome, max: 5, cost: (l) => 100 + l * 120, desc: (l) => '+' + (l * 50) + L.coinsPct },
   };
   function renderShop() {
     $('shop-coins').textContent = coins;
     for (const key of Object.keys(UPG_DEF)) {
       const def = UPG_DEF[key], lvl = upg[key], el = $('upg-' + key), maxed = lvl >= def.max, cost = def.cost(lvl);
-      el.innerHTML = `<div class="upg-info"><div class="upg-name">${def.name}</div><div class="upg-lvl">Ур. ${lvl}/${def.max} · ${def.desc(lvl)}</div>` +
+      el.innerHTML = `<div class="upg-info"><div class="upg-name">${def.name()}</div><div class="upg-lvl">${L.lvl} ${lvl}/${def.max} · ${def.desc(lvl)}</div>` +
         `<div class="upg-bar"><div style="width:${lvl / def.max * 100}%"></div></div></div>` +
-        (maxed ? `<button class="upg-buy max" disabled>МАКС</button>` : `<button class="upg-buy" data-k="${key}" ${coins < cost ? 'disabled' : ''}>🪙 ${cost}</button>`);
+        (maxed ? `<button class="upg-buy max" disabled>${L.max}</button>` : `<button class="upg-buy" data-k="${key}" ${coins < cost ? 'disabled' : ''}>🪙 ${cost}</button>`);
     }
     $('shop').querySelectorAll('.upg-buy[data-k]').forEach((btn) => {
       btn.onclick = () => { const k = btn.dataset.k, cost = UPG_DEF[k].cost(upg[k]);
@@ -731,6 +766,7 @@
 
   window.addEventListener('load', async () => {
     await window.YSDK.init();
+    try { detectLang(); } catch (e) {}
     try { init(); } catch (e) { console.error('init fail', e); }
     window.YSDK.gameReady();
   });

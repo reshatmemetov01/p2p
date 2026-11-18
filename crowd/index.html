@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Толпа</title>
+  <title>Crowd Rush</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="app">
     <canvas id="game"></canvas>
 
-    <button class="sound-btn" id="sound-btn" title="Звук">🔊</button>
+    <button class="sound-btn" id="sound-btn" title="Sound" data-i18n="sound" data-i18n-title>🔊</button>
 
     <div class="hud">
       <div class="progress">
@@ -22,39 +22,38 @@
     <div class="coins-pill"><span id="coins">0</span><span class="coin-ico">$</span></div>
     <span id="crowd" class="hidden">10</span><span id="dist" class="hidden">0</span>
 
-    <div class="tap-hint" id="tap-hint">Веди пальцем влево-вправо</div>
+    <div class="tap-hint" id="tap-hint" data-i18n="hint">Drag left and right</div>
 
     <div id="start" class="screen">
       <div class="screen-card">
         <div class="big-emoji">🏃‍♂️</div>
-        <h1>ТОЛПА</h1>
-        <p>Веди толпу пальцем. Выбирай выгодные воротца, обходи пропасти, побеждай красные толпы и добеги до финишной лестницы!</p>
-        <button class="btn btn-main" id="btn-start" disabled>Загрузка…</button>
+        <h1 data-i18n="title">CROWD RUSH</h1>
+        <p data-i18n="intro">Lead your crowd with your finger. Pick the best gates, avoid pits, beat the red crowds and reach the finish stairs!</p>
+        <button class="btn btn-main" id="btn-start" disabled data-i18n="loading">Loading…</button>
       </div>
     </div>
 
     <div id="end" class="screen hidden">
       <div class="screen-card">
         <div class="big-emoji">💀</div>
-        <h1>Толпа пала!</h1>
+        <h1></h1>
         <div class="stats">
-          <div>Дистанция: <b id="end-dist">0</b> м</div>
-          <div>Монеты за забег: <b id="end-coins">0</b> 🪙</div>
+          <b id="end-coins">0</b>
         </div>
-        <button class="btn btn-reward" id="btn-revive"><span class="reward-ico">▶</span> Продолжить за рекламу</button>
-        <button class="btn btn-reward" id="btn-x2"><span class="reward-ico">▶</span> Удвоить монеты</button>
-        <button class="btn btn-main" id="btn-upgrades">🔧 Прокачка</button>
-        <button class="btn btn-ghost" id="btn-again">Заново</button>
+        <button class="btn btn-reward" id="btn-revive"><span class="reward-ico">▶</span> <span data-i18n="revive">Continue (watch ad)</span></button>
+        <button class="btn btn-reward" id="btn-x2"><span class="reward-ico">▶</span> <span data-i18n="x2">Double coins</span></button>
+        <button class="btn btn-main" id="btn-upgrades" data-i18n="upgrades">🔧 Upgrades</button>
+        <button class="btn btn-ghost" id="btn-again">Retry</button>
       </div>
     </div>
 
     <div id="shop" class="screen hidden">
       <div class="screen-card wide">
-        <h1>🔧 Прокачка</h1>
+        <h1 data-i18n="shop">🔧 Upgrades</h1>
         <div class="balance">🪙 <span id="shop-coins">0</span></div>
         <div class="upg" id="upg-start"></div>
         <div class="upg" id="upg-income"></div>
-        <button class="btn btn-main" id="btn-close-shop">Готово</button>
+        <button class="btn btn-main" id="btn-close-shop" data-i18n="done">Done</button>
       </div>
     </div>
   </div>
