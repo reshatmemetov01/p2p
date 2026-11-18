@@ -18,12 +18,14 @@
       ctrl: 'Left side: move · Right button: jump · PC: WASD + Space', dropped: 'Parcel dropped! Pick it up!', cont: 'Continue (watch ad)',
       next: 'Next delivery ▶', retry: 'Retry', paused: 'Paused', resume: 'Resume', restart: 'Restart level', rotate: 'Rotate your device',
       delivered: 'Delivered!', crushed: 'Parcel crushed!', crushedText: 'A car ran over your parcel…', fell: 'Parcel lost!', fellText: 'Your parcel fell into a manhole…',
-      double: 'Double coins (watch ad)', winText: (c, t) => 'Coins: +' + c + ' · Time: ' + t + 's' },
+      double: 'Double coins (watch ad)', winText: (c, t) => 'Coins: +' + c + ' · Time: ' + t + 's',
+      eagleWarn: '🦅 Eagle! Move away!', eagleStole: '🦅 The eagle stole your parcel!', dogBit: '🐕 The dog grabbed your parcel!', slip: '🍌 Oops! Banana peel!', splash: '💦 Splash!', dogChase: '🐕 Run! Jump on something!' },
     ru: { level: 'Уровень', loading: 'Загрузка…', play: 'Играть!', intro: 'Доставь посылку через безумный город! Берегись машин и открытых люков.',
       ctrl: 'Слева — движение · Кнопка справа — прыжок · ПК: WASD + Пробел', dropped: 'Посылка упала! Подбери её!', cont: 'Продолжить за рекламу',
       next: 'Следующая доставка ▶', retry: 'Заново', paused: 'Пауза', resume: 'Продолжить', restart: 'Начать уровень заново', rotate: 'Поверни телефон',
       delivered: 'Доставлено!', crushed: 'Посылку раздавили!', crushedText: 'Машина переехала посылку…', fell: 'Посылка потеряна!', fellText: 'Посылка упала в люк…',
-      double: 'Удвоить монеты (реклама)', winText: (c, t) => 'Монеты: +' + c + ' · Время: ' + t + ' с' },
+      double: 'Удвоить монеты (реклама)', winText: (c, t) => 'Монеты: +' + c + ' · Время: ' + t + ' с',
+      eagleWarn: '🦅 Орёл! Уходи с тени!', eagleStole: '🦅 Орёл украл посылку!', dogBit: '🐕 Собака выбила посылку!', slip: '🍌 Ой! Банановая кожура!', splash: '💦 Окатило водой!', dogChase: '🐕 Беги! Запрыгни повыше!' },
   };
   const RU_LANGS = ['ru', 'be', 'uk', 'kk', 'uz', 'ky', 'tg', 'hy', 'az', 'tt'];
   let L = TEXTS.en;
@@ -51,7 +53,8 @@
 
   let renderer, scene, camera, sun; const clock = new T.Clock();
   const K = {}; let cityMat, fadeMat, courierTmpl = null, courierClips = [];
-  let loaded = false, mode = 'menu';
+  let loaded = false, mode = 'menu', dogTmpl = null, dogClips = [];
+  let dogs = [], bananas = [], jets = [], eagle = null;
   let solids = [], blocks = [], holes = [], cars = [], lights = { t: 0, phase: 0 }, coinsArr = [], fx = [], levelObjs = [];
   let targetFwd = [0, 1], target = null, startPos = null, levelTime = 0, runCoins = 0, lostReason = 'fell';
   let player = null, parcel = null, gps = null, ring = null, marker = null;
@@ -125,6 +128,8 @@
     levelObjs.forEach((o) => { scene.remove(o); if (o.geometry) o.geometry.dispose(); }); levelObjs = [];
     solids = []; blocks = []; holes = []; coinsArr = []; cars.forEach((c) => scene.remove(c.obj)); cars = [];
     fx.forEach((f) => scene.remove(f.m)); fx = [];
+    dogs.forEach((d) => scene.remove(d.obj)); dogs = []; bananas = []; jets = [];
+    if (eagle) { eagle.state = 'off'; eagle.g.visible = false; eagle.shadow.visible = false; eagle.timer = 14; }
   }
   const BUILD = ['building_A', 'building_B', 'building_C', 'building_D', 'building_E', 'building_F', 'building_G', 'building_H'];
   const DIRS = { '+z': 0, '-z': Math.PI, '+x': Math.PI / 2, '-x': -Math.PI / 2 };
@@ -234,6 +239,7 @@
     }
     // машины
     spawnCars(level, R);
+    spawnChaos(level, R, fronts);
   }
   function addHole(x, z) {
     const tex = texCanvas(64, 64, (c, w, h) => { const g = c.createRadialGradient(32, 32, 4, 32, 32, 30); g.addColorStop(0, '#000'); g.addColorStop(0.75, '#141414'); g.addColorStop(0.86, '#555'); g.addColorStop(1, '#888'); c.fillStyle = g; c.beginPath(); c.arc(32, 32, 31, 0, 7); c.fill(); });
@@ -289,6 +295,135 @@
   function carBox(c, out) {
     const hx = c.ax === 'x' ? c.half : c.hw, hz = c.ax === 'x' ? c.hw : c.half, p = c.obj.position;
     out.min.set(p.x - hx, GROUND, p.z - hz); out.max.set(p.x + hx, GROUND + 1.3, p.z + hz); return out;
+  }
+
+
+  // ---- Хаос: собаки, орёл, банановые кожуры, сломанные гидранты ----
+  function showAlert(text, sec) { const a = $('parcel-alert'); a.textContent = text; a.classList.remove('hidden'); a.style.animation = 'none'; void a.offsetWidth; a.style.animation = ''; alertT = sec || 2.2; }
+  const far = (x, z, d) => Math.hypot(x - startPos.x, z - startPos.z) > d && Math.hypot(x - target.x, z - target.z) > d;
+  function spawnChaos(level, R, fronts) {
+    const pick = (n, minD) => { const out = []; for (let k = 0; k < 60 && out.length < n; k++) { const f = fronts[Math.floor(R() * fronts.length)]; if (far(f.x, f.z, minD) && out.indexOf(f) < 0) out.push(f); } return out; };
+    // собаки — сидят у дверей
+    pick(Math.min(1 + Math.floor(level / 3), 4), 12).forEach((f) => {
+      const obj = T.SkeletonUtils.clone(dogTmpl); obj.scale.setScalar(1.5 / 690);
+      obj.traverse((m) => { if (m.isMesh) { m.material = dogMat; m.castShadow = true; m.frustumCulled = false; } }); scene.add(obj);
+      const mixer = new T.AnimationMixer(obj), act = {}; dogClips.forEach((c) => { act[/Walk/.test(c.name) ? 'walk' : 'idle'] = mixer.clipAction(c); }); act.idle.play();
+      const body = makeBody(0.35, 0.6); body.pos.set(f.x - f.fwd[1] * 1.5, WALK, f.z + f.fwd[0] * 1.5);
+      dogs.push({ obj, mixer, act, cur: 'idle', body, home: body.pos.clone(), side: [-f.fwd[1], f.fwd[0]], state: 'home', t: 0, cd: 0, yaw: Math.atan2(f.fwd[0], f.fwd[1]) });
+    });
+    // банановые кожуры — на тротуарах и дорогах
+    const nb = Math.min(6 + level, 16);
+    for (let k = 0; k < nb * 3 && bananas.length < nb; k++) {
+      const vertical = R() < 0.5, ri = 3 + 4 * Math.floor(R() * 3), along = (R() - 0.5) * (N - 2) * TILE;
+      const off = (R() < 0.5 ? -1 : 1) * (R() < 0.5 ? LANE * 0.6 : TILE / 2 + 0.9);
+      const x = vertical ? tileX(ri) + off : along, z = vertical ? along : tileZ(ri) + off;
+      if (!far(x, z, 6) || inHole(x, z)) continue;
+      const g = new T.Group(); g.add(new T.Mesh(bananaGeo, bananaMat)); const tip = new T.Mesh(new T.ConeGeometry(0.06, 0.18, 5), new T.MeshLambertMaterial({ color: 0x6a4a1a })); tip.position.set(0.3, 0.03, 0); tip.rotation.z = -Math.PI / 2; g.add(tip);
+      for (let q = 0; q < 3; q++) { const fl = new T.Mesh(new T.ConeGeometry(0.07, 0.3, 4), bananaMat); fl.position.set(-0.3, 0.03, (q - 1) * 0.12); fl.rotation.set(0, (q - 1) * 0.6, Math.PI / 2 + 0.3); g.add(fl); }
+      g.position.set(x, (Math.abs(off) > LANE + 0.5 ? WALK : GROUND) + 0.05, z); g.rotation.y = R() * 6.28; g.scale.setScalar(1.3);
+      g.traverse((m) => { if (m.isMesh) m.castShadow = true; }); scene.add(g); levelObjs.push(g); bananas.push({ g, on: true, vertical });
+    }
+    // сломанные гидранты — бьют струёй в сторону дороги
+    pick(Math.min(2 + Math.floor(level / 2), 7), 9).forEach((f, k) => {
+      const x = f.x + f.fwd[0] * 1.9 - f.fwd[1] * 1.2, z = f.z + f.fwd[1] * 1.9 + f.fwd[0] * 1.2;
+      const h = K.firehydrant.clone(); h.scale.setScalar(S * 1.5); h.position.set(x, WALK, z); h.traverse((m) => { if (m.isMesh) m.castShadow = true; }); scene.add(h); levelObjs.push(h);
+      solidBox(x - 0.22, WALK, z - 0.22, x + 0.22, WALK + 0.5, z + 0.22);
+      const drops = []; const jg = new T.Group(); scene.add(jg); levelObjs.push(jg);
+      for (let q = 0; q < 26; q++) { const d = new T.Mesh(dropGeo, dropMat); jg.add(d); drops.push(d); }
+      jets.push({ x, z, dir: new T.Vector3(f.fwd[0], 0, f.fwd[1]), drops, jg, t: k * 1.7, on: false, len: 5.5 });
+    });
+  }
+  let bananaGeo = null, bananaMat = null, dropGeo = null, dropMat = null, dogMat = null;
+  function chaosAssets() {
+    bananaGeo = new T.TorusGeometry(0.3, 0.075, 6, 14, Math.PI).rotateX(Math.PI / 2); bananaMat = new T.MeshLambertMaterial({ color: 0xffd93b, emissive: 0x3a2e00 });
+    dropGeo = new T.SphereGeometry(0.16, 6, 5); dropMat = new T.MeshLambertMaterial({ color: 0x9fdcff, emissive: 0x2a6a9a, transparent: true, opacity: 0.85 });
+    dogMat = new T.MeshLambertMaterial({ color: 0xb8814a, skinning: true });
+    // орёл (лёгкая мультяшная модель)
+    const g = new T.Group(), brown = new T.MeshLambertMaterial({ color: 0x6b4426 }), white = new T.MeshLambertMaterial({ color: 0xffffff }), yellow = new T.MeshLambertMaterial({ color: 0xffc23a });
+    const body = new T.Mesh(new T.SphereGeometry(0.5, 12, 10), brown); body.scale.set(0.8, 0.7, 1.3); g.add(body);
+    const head = new T.Mesh(new T.SphereGeometry(0.33, 12, 10), white); head.position.set(0, 0.25, 0.68); g.add(head);
+    const beak = new T.Mesh(new T.ConeGeometry(0.12, 0.34, 8), yellow); beak.rotation.x = Math.PI / 2 + 0.4; beak.position.set(0, 0.17, 1.0); g.add(beak);
+    [-1, 1].forEach((sd) => { const e = new T.Mesh(new T.SphereGeometry(0.06, 6, 5), new T.MeshBasicMaterial({ color: 0x111111 })); e.position.set(sd * 0.17, 0.33, 0.9); g.add(e); });
+    const tail = new T.Mesh(new T.BoxGeometry(0.5, 0.06, 0.5), white); tail.position.set(0, 0, -0.75); tail.rotation.x = -0.2; g.add(tail);
+    const wings = [-1, 1].map((sd) => { const piv = new T.Group(); piv.position.set(sd * 0.32, 0.12, 0); const w = new T.Mesh(new T.BoxGeometry(1.5, 0.06, 0.62), brown); w.position.x = sd * 0.78; piv.add(w);
+      const tipw = new T.Mesh(new T.BoxGeometry(0.5, 0.05, 0.45), new T.MeshLambertMaterial({ color: 0x3e2614 })); tipw.position.x = sd * 1.7; piv.add(tipw); g.add(piv); return piv; });
+    [-1, 1].forEach((sd) => { const c = new T.Mesh(new T.CylinderGeometry(0.04, 0.04, 0.35, 5), yellow); c.position.set(sd * 0.15, -0.4, 0.1); g.add(c); });
+    g.traverse((m) => { if (m.isMesh) m.castShadow = true; }); g.scale.setScalar(1.35); g.visible = false; scene.add(g);
+    const sh = new T.Mesh(new T.CircleGeometry(1.3, 24), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
+    sh.rotation.x = -Math.PI / 2; sh.visible = false; scene.add(sh);
+    eagle = { g, wings, shadow: sh, state: 'off', t: 0, timer: 14, lock: new T.Vector3(), from: new T.Vector3(), to: new T.Vector3(), drop: new T.Vector3() };
+  }
+  function setDogAnim(d, n) { if (d.cur === n) return; d.act[n].reset().play(); d.act[d.cur].crossFadeTo(d.act[n], 0.15, false); d.cur = n; }
+  function updateDogs(dt) {
+    for (const d of dogs) {
+      const b = d.body, p = player.pos; const dx = p.x - b.pos.x, dz = p.z - b.pos.z, dist = Math.hypot(dx, dz);
+      let vx = 0, vz = 0; if (d.cd > 0) d.cd -= dt;
+      if (d.state === 'home') { if (mode === 'play' && carrying && dist < 9 && d.cd <= 0 && stun <= 0) { d.state = 'chase'; showAlert(L.dogChase, 1.6); bark(); } }
+      else if (d.state === 'chase') {
+        const high = p.y > WALK + 0.5 && player.grounded;
+        if (!carrying || mode !== 'play') d.state = 'return';
+        else if (high) { d.state = 'bark'; d.t = 2.4; bark(); }
+        else { vx = dx / (dist || 1) * 7.3; vz = dz / (dist || 1) * 7.3; if (dist < 0.95 && stun <= 0) { hitPlayer(new T.Vector3(dx, 0, dz).normalize(), 4.5); showAlert(L.dogBit); bark(); d.state = 'return'; d.cd = 9; } }
+        if (Math.hypot(b.pos.x - d.home.x, b.pos.z - d.home.z) > 26) d.state = 'return';
+      } else if (d.state === 'bark') { d.t -= dt; d.yaw = Math.atan2(dx, dz); b.pos.y = WALK + Math.abs(Math.sin(d.t * 14)) * 0.12; if (d.t <= 0) { d.state = 'return'; d.cd = 5; } if ((d.t * 3 | 0) !== ((d.t + dt) * 3 | 0)) bark(); }
+      else if (d.state === 'return') { const hx = d.home.x - b.pos.x, hz = d.home.z - b.pos.z, hd = Math.hypot(hx, hz); if (hd < 0.4) d.state = 'home'; else { vx = hx / hd * 3.6; vz = hz / hd * 3.6; } }
+      b.vel.x = vx; b.vel.z = vz; b.vel.y -= G * dt; moveBody(b, dt); if (b.pos.y < GROUND - 3) b.pos.copy(d.home);
+      if (vx || vz) d.yaw = Math.atan2(vx, vz);
+      setDogAnim(d, vx || vz ? 'walk' : 'idle'); d.act.walk.timeScale = d.state === 'chase' ? 2.6 : 1.4;
+      d.obj.position.copy(b.pos); d.obj.rotation.y = d.yaw - Math.PI / 2; d.mixer.update(dt);
+    }
+  }
+  function bark() { if (!window.GameAudio || !GameAudio.ctx || !GameAudio.on) return; const t = GameAudio.ctx.currentTime; GameAudio.tone(420, t, 0.09, 'square', 0.35); GameAudio.tone(300, t + 0.08, 0.1, 'square', 0.3); }
+  function slipCheck() {
+    if (stun > 0 || !player.grounded) return;
+    for (const bn of bananas) {
+      if (!bn.on || Math.hypot(bn.g.position.x - player.pos.x, bn.g.position.z - player.pos.z) > 0.6) continue;
+      bn.on = false; bn.g.visible = false;
+      const hs = Math.hypot(player.vel.x, player.vel.z); const dir = hs > 0.5 ? new T.Vector3(player.vel.x / hs, 0, player.vel.z / hs) : new T.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+      stun = 1.1; camShake = 0.25; player.vel.set(dir.x * 10, 5, dir.z * 10); play(player.ch, 'Hit_A', 0.05);
+      if (carrying) { carrying = false; parcel.state = 'free'; parcel.pickCd = 0.6; parcel.vel.set(dir.x * 8, 7, dir.z * 8); parcel.spin.set(6, 3, 5); }
+      showAlert(L.slip); if (window.GameAudio && GameAudio.ctx) GameAudio.slide && GameAudio.slide(900, 200, GameAudio.ctx.currentTime, 0.35, 'sine', 0.4);
+      break;
+    }
+  }
+  function updateJets(dt, tt) {
+    for (const j of jets) {
+      j.t += dt; const cyc = j.t % 5.2; const on = cyc > 3; j.on = on; j.jg.visible = on;
+      if (on) j.drops.forEach((d, q) => { const f = ((tt * 1.6 + q / j.drops.length) % 1); const s = f * j.len; d.position.set(j.x + j.dir.x * s + Math.sin(q * 7.1) * 0.12, WALK + 0.45 + s * 0.35 - s * s * 0.07, j.z + j.dir.z * s + Math.cos(q * 5.3) * 0.12); d.scale.setScalar(0.7 + f * 0.9); });
+      if (!on || mode !== 'play') continue;
+      const test = (b) => { const rx = b.pos.x - j.x, rz = b.pos.z - j.z, along = rx * j.dir.x + rz * j.dir.z, lat = Math.abs(rx * j.dir.z - rz * j.dir.x); return along > 0.2 && along < j.len && lat < 0.9 && b.pos.y < WALK + 2; };
+      if (stun <= 0 && test(player)) { const dd = j.dir.clone(); hitPlayer(dd, 7.5); showAlert(L.splash, 1.6); }
+      if (parcel.state === 'free' && test(parcel)) { parcel.vel.x = j.dir.x * 7; parcel.vel.z = j.dir.z * 7; parcel.vel.y = Math.max(parcel.vel.y, 3); }
+    }
+  }
+  function updateEagle(dt, tt) {
+    const e = eagle; if (!e) return;
+    e.wings.forEach((w, i) => { w.rotation.z = (i ? -1 : 1) * Math.sin(tt * (e.state === 'dive' ? 6 : 13)) * 0.65; });
+    if (e.state === 'off') { if (mode === 'play' && carrying && stun <= 0) { e.timer -= dt; if (e.timer <= 0) { e.state = 'shadow'; e.t = 2.2; e.shadow.visible = true; e.shadow.material.color.setHex(0x000000); showAlert(L.eagleWarn, 2.2); } } return; }
+    const p = player.pos;
+    if (e.state === 'shadow') { e.t -= dt; e.shadow.position.set(p.x, p.y + 0.05, p.z); const k = 1.6 - e.t * 0.25; e.shadow.scale.setScalar(k);
+      if (e.t <= 0) { e.state = 'lock'; e.t = 0.8; e.lock.copy(e.shadow.position); e.g.visible = true; e.from.set(p.x - 14, p.y + 16, p.z - 10); e.g.position.copy(e.from); } }
+    else if (e.state === 'lock') { e.t -= dt; e.shadow.material.color.setHex(Math.sin(tt * 30) > 0 ? 0xff2020 : 0x000000);
+      const f = 1 - e.t / 0.8; e.g.position.lerpVectors(e.from, tmpV.set(e.lock.x, e.lock.y + 6, e.lock.z), f * 0.8); e.g.lookAt(e.lock.x, e.lock.y + 4, e.lock.z);
+      if (e.t <= 0) { e.state = 'dive'; e.t = 0.35; e.to.copy(e.g.position); } }
+    else if (e.state === 'dive') { e.t -= dt; const f = 1 - Math.max(0, e.t) / 0.35; e.g.position.lerpVectors(e.to, tmpV.set(e.lock.x, e.lock.y + 1.3, e.lock.z), f); e.g.rotation.x = 0.6;
+      if (e.t <= 0) {
+        e.shadow.visible = false;
+        if (carrying && Math.hypot(p.x - e.lock.x, p.z - e.lock.z) < 1.5 && mode === 'play') {
+          carrying = false; parcel.state = 'eagle'; showAlert(L.eagleStole, 2.6); camShake = 0.3; if (window.GameAudio) GameAudio.sfx('fail');
+          // куда уронит: случайная точка на дороге в 18–32 м
+          for (let k = 0; k < 30; k++) { const a = Math.random() * 6.28, r = 18 + Math.random() * 14; const vertical = Math.random() < 0.5, ri = 3 + 4 * Math.floor(Math.random() * 3);
+            let x = e.lock.x + Math.cos(a) * r, z = e.lock.z + Math.sin(a) * r; const sw = (Math.random() < 0.5 ? -1 : 1) * (TILE / 2 + 1.0); if (vertical) x = tileX(ri) + sw; else z = tileZ(ri) + sw;
+            if (Math.abs(x) < HALF - 3 && Math.abs(z) < HALF - 3 && !inHole(x, z) && Math.hypot(x - e.lock.x, z - e.lock.z) > 12 && !solids.some((q) => q.kind === 'static' && q.box.containsPoint(tmpV2.set(x, WALK + 0.5, z)))) { e.drop.set(x, 0, z); break; } }
+          e.state = 'carry';
+        } else { e.state = 'leave'; e.t = 1.6; }
+      } }
+    else if (e.state === 'carry') {
+      const tgt = tmpV.set(e.drop.x, 8, e.drop.z), d = tgt.clone().sub(e.g.position), L2 = d.length();
+      if (L2 < 0.6) { parcel.state = 'free'; parcel.pos.set(e.g.position.x, e.g.position.y - 1.0, e.g.position.z); parcel.vel.set(0, -2, 0); parcel.spin.set(3, 2, 4); parcel.pickCd = 0.3; e.state = 'leave'; e.t = 1.8; }
+      else { d.multiplyScalar(Math.min(1, dt * 9.5 / L2)); e.g.position.add(d); e.g.position.y += (8 - e.g.position.y) * dt * 2; e.g.lookAt(tgt.x, e.g.position.y, tgt.z); e.g.rotation.x = 0; }
+    }
+    else if (e.state === 'leave') { e.t -= dt; e.g.position.y += dt * 9; e.g.position.x += dt * 6; if (e.t <= 0) { e.state = 'off'; e.g.visible = false; e.timer = 26 + Math.random() * 14; } }
   }
 
   // ---- Физика тел ----
@@ -370,7 +505,7 @@
       carrying = false; parcel.state = 'free'; parcel.pickCd = 0.7;
       parcel.vel.set(dir.x * pw * 0.7 + (Math.random() - 0.5) * 2, 9, dir.z * pw * 0.7 + (Math.random() - 0.5) * 2);
       parcel.spin.set(Math.random() * 10 - 5, Math.random() * 10 - 5, Math.random() * 10 - 5);
-      $('parcel-alert').classList.remove('hidden'); alertT = 2.2;
+      showAlert(L.dropped);
     }
     if (window.GameAudio) GameAudio.sfx('fail');
   }
@@ -381,15 +516,16 @@
     for (const c of coinsArr) if (!c.taken) c.o.rotation.y += dt * 3;
     if (ring) { ring.material.opacity = 0.55 + Math.sin(t * 5) * 0.3; marker.position.y = WALK + 4.2 + Math.sin(t * 3) * 0.35; marker.rotation.y += dt * 2; }
     if (mode === 'play' || mode === 'win') updatePlayer(dt);
-    if (parcel.state === 'free' || parcel.state === 'carried') updateParcel(dt);
+    if (parcel.state === 'free' || parcel.state === 'carried' || parcel.state === 'eagle') updateParcel(dt);
+    if (mode === 'play' || mode === 'dead') { updateDogs(dt); updateEagle(dt, t); slipCheck(); } updateJets(dt, t);
     if (mode === 'play') { levelTime += dt; checkCars(); }
     if (mode === 'dead') { deadT -= dt; if (deadT <= 0) { mode = 'play'; resetPlayerAt(safePos); player.ch.root.visible = true; } }
     updateFx(dt); updateCamera(dt); updateFade();
     if (alertT > 0) { alertT -= dt; if (alertT <= 0) $('parcel-alert').classList.add('hidden'); }
     // HUD: расстояние до адреса
-    const src = parcel.state === 'free' ? parcel.pos : player.pos;
+    const lostP = parcel.state === 'free' || parcel.state === 'eagle'; const src = lostP ? parcel.pos : player.pos;
     $('dist').textContent = Math.round(Math.hypot(target.x - src.x, target.z - src.z) / 1.1) + ' m';
-    if (gps) { gps.visible = mode === 'play'; const p = player.pos; gps.position.set(p.x, p.y + 2.25, p.z); const goal = parcel.state === 'free' ? parcel.pos : target; gps.rotation.y = Math.atan2(goal.x - p.x, goal.z - p.z); gps.children.forEach((m) => m.material.color.setHex(parcel.state === 'free' ? 0xff5a5a : 0xffd23f)); }
+    if (gps) { gps.visible = mode === 'play'; const p = player.pos; gps.position.set(p.x, p.y + 2.25, p.z); const goal = lostP ? parcel.pos : target; gps.rotation.y = Math.atan2(goal.x - p.x, goal.z - p.z); gps.children.forEach((m) => m.material.color.setHex(lostP ? 0xff5a5a : 0xffd23f)); }
   }
 
   function updatePlayer(dt) {
@@ -435,6 +571,7 @@
       b.mesh.position.set(p.pos.x + fx2 * CARRY.f, p.pos.y + CARRY.y, p.pos.z + fz * CARRY.f); b.mesh.rotation.set(0, p.yaw, 0);
       b.pos.copy(b.mesh.position); b.pos.y -= BOX.h / 2; return;
     }
+    if (b.state === 'eagle') { b.mesh.position.set(eagle.g.position.x, eagle.g.position.y - 0.9, eagle.g.position.z); b.mesh.rotation.set(0, eagle.g.rotation.y, 0); b.pos.copy(b.mesh.position); b.pos.y -= BOX.h / 2; return; }
     b.vel.y -= G * dt;
     if (b.grounded) { const f = Math.exp(-6 * dt); b.vel.x *= f; b.vel.z *= f; b.spin.multiplyScalar(f); }
     moveBody(b, dt);
@@ -558,13 +695,13 @@
     if (!loaded) return;
     const rot = !$('rotate').classList.contains('hidden');
     if (mode === 'menu') { updateLights(dt); updateCars(dt); if (player) { player.ch.mixer.update(dt); carryPose(player.ch); updateParcel(0); } updateCamera(dt); updateFade(); }
-    else if (mode !== 'pause' && !rot) update(dt);
+    else if (mode !== 'pause' && !rot) { const n = window.__ts || 1; for (let k = 0; k < n; k++) update(dt); }
     renderer.render(scene, camera);
   }
 
   function init() {
     detectLang(); initThree(); setupInput();
-    const loader = new T.GLTFLoader(); let left = 2;
+    const loader = new T.GLTFLoader(); let left = 3;
     const done = () => {
       if (--left) return;
       cityMat = new T.MeshStandardMaterial({ map: K.__map, roughness: 0.65, metalness: 0 });
@@ -572,6 +709,7 @@
       // машины и мелочи используют тот же материал
       Object.keys(K).forEach((k) => { if (K[k] && K[k].traverse) K[k].traverse((m) => { if (m.isMesh) m.material = cityMat; }); });
       { let my = 0; K.road_straight.traverse((m) => { if (!m.isMesh) return; const pa = m.geometry.attributes.position; for (let i = 0; i < pa.count; i++) { const x = pa.getX(i), y = pa.getY(i), z = pa.getZ(i); if (Math.abs(x) < 0.3 && Math.abs(z) < 0.3) my = Math.max(my, y); } }); GROUND = my * S + 0.005; }
+      chaosAssets();
       loaded = true;
       player = Object.assign(makeBody(PH.hw, PH.h), { ch: makeCourier(), yaw: 0 }); parcel = makeParcel();
       buildCity(save.level); resetPlayerAt(startPos); player.yaw = Math.atan2(target.x - startPos.x, target.z - startPos.z);
@@ -584,6 +722,8 @@
     const cityDone = (g) => { let r = g.scene; if (r.children.length === 1 && !r.children[0].isMesh) r = r.children[0]; r.children.forEach((c) => { K[c.name] = c; c.traverse((m) => { if (m.isMesh && m.material.map) { m.material.map.encoding = T.sRGBEncoding; K.__map = m.material.map; } }); }); done(); };
     const courierDone = (g) => { courierTmpl = g.scene; courierClips = g.animations; g.scene.traverse((m) => { if (m.isMesh && m.material.map) m.material.map.encoding = T.sRGBEncoding; }); done(); };
     if (window.CITY_GLB_B64) loader.parse(b64(window.CITY_GLB_B64), '', cityDone, fail); else loader.load('assets/city.glb', cityDone, undefined, fail);
+    const dogDone = (g) => { dogTmpl = g.scene; dogClips = g.animations; done(); };
+    if (window.DOG_GLB_B64) loader.parse(b64(window.DOG_GLB_B64), '', dogDone, fail); else loader.load('assets/dog.glb', dogDone, undefined, fail);
     if (window.COURIER_GLB_B64) loader.parse(b64(window.COURIER_GLB_B64), '', courierDone, fail); else loader.load('assets/courier.glb', courierDone, undefined, fail);
 
     $('btn-play').addEventListener('click', () => { if (window.GameAudio) GameAudio.sfx('click'); startLevel(); });
@@ -600,6 +740,12 @@
         target: [+target.x.toFixed(1), +target.z.toFixed(1)], cars: cars.length, holes: holes.length, light: lights.phase }),
       teleport: (x, y, z) => { player.pos.set(x, y, z); player.vel.set(0, 0, 0); }, move: (x, y) => { input.x = x; input.y = y; }, jump: () => { input.jump = 0.15; },
       hit: () => hitPlayer(new T.Vector3(1, 0, 0.2)), holesAt: () => holes.map((h) => [h.x, h.z]), carsAt: () => cars.map((c) => [c.obj.position.x, c.obj.position.z, c.ax, c.dir, +c.v.toFixed(1)]),
+      dogsAt: () => dogs.map((d) => [d.body.pos.x, d.body.pos.z, d.state]), bananasAt: () => bananas.filter((b) => b.on).map((b) => [b.g.position.x, b.g.position.z]), jetsAt: () => jets.map((j) => [j.x, j.z, j.dir.x, j.dir.z, j.on]), eagleNow: () => { eagle.timer = 0; }, eagleState: () => eagle.state, eagleDbg: () => [eagle.state, eagle.g.position.toArray().map((v) => +v.toFixed(1)), eagle.drop.toArray()],
+      place: (kind) => {
+        if (kind === 'dog') { const d = dogs[0]; player.pos.set(d.home.x + d.side[1] * 5.5, GROUND + 0.1, d.home.z - d.side[0] * 5.5); return [d.home.x, d.home.z]; }
+        if (kind === 'banana') { const bn = bananas.find((b) => b.on); const v = bn.vertical; player.pos.set(bn.g.position.x - (v ? 0 : 3), bn.g.position.y + 0.1, bn.g.position.z - (v ? 3 : 0)); return v ? [0, 1] : [-1, 0]; }
+        if (kind === 'jet') { const j = jets[0]; j.t = 3.05; player.pos.set(j.x + j.dir.x * 2.5, WALK + 0.1, j.z + j.dir.z * 2.5); return [j.x, j.z]; }
+      },
       toTarget: () => { player.pos.set(target.x + targetFwd[0] * 3, WALK + 0.2, target.z + targetFwd[1] * 3); return targetFwd; }, carry: CARRY, setLevel: (n) => { save.level = n; },
     };
   }

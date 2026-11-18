@@ -1,0 +1,4 @@
+Animal Pack Vol.2 by Quaternius (quaternius.com)
+Source: https://opengameart.org/content/animated-animales-low-poly
+License: CC0 1.0 Universal (public domain) - https://creativecommons.org/publicdomain/zero/1.0/
+Used: Dog.fbx (converted to dog.glb).
