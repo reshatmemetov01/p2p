@@ -19,13 +19,13 @@
       next: 'Next delivery ▶', retry: 'Retry', paused: 'Paused', resume: 'Resume', restart: 'Restart level', rotate: 'Rotate your device',
       delivered: 'Delivered!', crushed: 'Parcel crushed!', crushedText: 'A car ran over your parcel…', fell: 'Parcel lost!', fellText: 'Your parcel fell into a manhole…',
       double: 'Double coins (watch ad)', winText: (c, t) => 'Coins: +' + c + ' · Time: ' + t + 's',
-      pickup: '📦 Pick up the parcel! Follow the red arrow', eagleWarn: '🦅 Eagle! Move away!', eagleStole: '🦅 The eagle stole your parcel!', dogBit: '🐕 The dog grabbed your parcel!', slip: '🍌 Oops! Banana peel!', splash: '💦 Splash!', dogChase: '🐕 Run! Jump on something!' },
+      pickup: '📦 Pick up the parcel! Follow the red arrow', tip: 'Bring the parcel to the green circle! Follow the yellow arrow ➜', nextIn: (n) => 'Next delivery ▶ ' + n, eagleWarn: '🦅 Eagle! Move away!', eagleStole: '🦅 The eagle stole your parcel!', dogBit: '🐕 The dog grabbed your parcel!', slip: '🍌 Oops! Banana peel!', splash: '💦 Splash!', dogChase: '🐕 Run! Jump on something!' },
     ru: { level: 'Уровень', loading: 'Загрузка…', play: 'Играть!', intro: 'Доставь посылку через безумный город! Берегись машин и открытых люков.',
       ctrl: 'Слева — движение · Кнопка справа — прыжок · ПК: WASD + Пробел', dropped: 'Посылка упала! Подбери её!', cont: 'Продолжить за рекламу',
       next: 'Следующая доставка ▶', retry: 'Заново', paused: 'Пауза', resume: 'Продолжить', restart: 'Начать уровень заново', rotate: 'Поверни телефон',
       delivered: 'Доставлено!', crushed: 'Посылку раздавили!', crushedText: 'Машина переехала посылку…', fell: 'Посылка потеряна!', fellText: 'Посылка упала в люк…',
       double: 'Удвоить монеты (реклама)', winText: (c, t) => 'Монеты: +' + c + ' · Время: ' + t + ' с',
-      pickup: '📦 Подними посылку! Беги по красной стрелке', eagleWarn: '🦅 Орёл! Уходи с тени!', eagleStole: '🦅 Орёл украл посылку!', dogBit: '🐕 Собака выбила посылку!', slip: '🍌 Ой! Банановая кожура!', splash: '💦 Окатило водой!', dogChase: '🐕 Беги! Запрыгни повыше!' },
+      pickup: '📦 Подними посылку! Беги по красной стрелке', tip: 'Отнеси посылку в зелёный круг! Беги по жёлтой стрелке ➜', nextIn: (n) => 'Следующая доставка ▶ ' + n, eagleWarn: '🦅 Орёл! Уходи с тени!', eagleStole: '🦅 Орёл украл посылку!', dogBit: '🐕 Собака выбила посылку!', slip: '🍌 Ой! Банановая кожура!', splash: '💦 Окатило водой!', dogChase: '🐕 Беги! Запрыгни повыше!' },
   };
   const RU_LANGS = ['ru', 'be', 'uk', 'kk', 'uz', 'ky', 'tg', 'hy', 'az', 'tt'];
   let L = TEXTS.en;
@@ -81,11 +81,12 @@
     gm.rotation.x = -Math.PI / 2; gm.position.y = -0.05; gm.receiveShadow = true; scene.add(gm);
     window.addEventListener('resize', onResize); onResize();
   }
+  let portrait = false;
   function onResize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 1.3 ? 64 : 50; camera.updateProjectionMatrix();
     const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    $('rotate').classList.toggle('hidden', !(touch && h > w));
+    $('rotate').classList.add('hidden'); portrait = h > w;
   }
 
   // ---- Сборка статичной геометрии ----
@@ -495,6 +496,8 @@
     $('lvl').textContent = save.level; $('coins').textContent = save.coins; $('parcel-alert').classList.add('hidden');
     ['start', 'end', 'pause'].forEach((id) => $(id).classList.add('hidden'));
     camera.position.set(player.pos.x, 12, player.pos.z - 10);
+    window.YSDK.event('level_started', save.level);
+    if (save.level <= 2) { const t = $('tip'); t.textContent = L.tip; t.classList.remove('hidden'); clearTimeout(startLevel._t); startLevel._t = setTimeout(() => t.classList.add('hidden'), 5000); }
   }
   function hitPlayer(dir, power) {
     if (stun > 0 || mode !== 'play') return;
@@ -606,14 +609,14 @@
   }
   function lose(reason) {
     if (mode !== 'play' && mode !== 'dead') return;
-    lostReason = reason; mode = 'lost'; camShake = 0.3;
+    lostReason = reason; mode = 'lost'; camShake = 0.3; window.YSDK.event('level_failed', save.level);
     if (reason === 'fell') splash(parcel.pos, 0x333333); else splash(parcel.mesh.position, 0xc98d4f);
     if (window.GameAudio) GameAudio.sfx('fail');
     setTimeout(showLost, 1100);
   }
   function die() { mode = 'dead'; deadT = 1.0; player.ch.root.visible = false; if (carrying) parcel.mesh.visible = false; if (window.GameAudio) GameAudio.sfx('fail'); }
   function win() {
-    mode = 'win'; carrying = false; parcel.state = 'placed';
+    mode = 'win'; carrying = false; parcel.state = 'placed'; window.YSDK.event('level_completed', save.level); $('tip').classList.add('hidden');
     parcel.mesh.position.set(target.x, WALK + BOX.h / 2, target.z); parcel.mesh.rotation.set(0, 0, 0);
     confetti(parcel.mesh.position, 70); if (window.GameAudio) GameAudio.sfx('win');
     const timeBonus = Math.max(0, 30 - Math.floor(levelTime / 2));
@@ -621,16 +624,19 @@
     setTimeout(() => {
       $('end-emoji').textContent = '📦🎉'; $('end-title').textContent = L.delivered; $('end-text').textContent = L.winText(runCoins, levelTime.toFixed(1));
       const bc = $('btn-continue'); bc.classList.remove('hidden'); bc.lastElementChild.textContent = L.double; bc.disabled = false;
-      bc.onclick = () => window.YSDK.showRewarded(() => { save.coins += runCoins; persist(); $('coins').textContent = save.coins; bc.disabled = true; $('end-text').textContent = L.winText(runCoins * 2, levelTime.toFixed(1)); });
-      $('btn-next').classList.remove('hidden'); $('end').classList.remove('hidden');
-    }, 1700);
+      const nb = $('btn-next'); let n = 4; nb.textContent = L.nextIn(n); $('btn-retry').classList.add('hidden');
+      clearInterval(win._iv); win._iv = setInterval(() => { if (--n <= 0) { clearInterval(win._iv); nextLevel(); } else nb.textContent = L.nextIn(n); }, 1000);
+      bc.onclick = () => { clearInterval(win._iv); nb.textContent = L.next; window.YSDK.showRewarded(() => { save.coins += runCoins; persist(); $('coins').textContent = save.coins; bc.disabled = true; $('end-text').textContent = L.winText(runCoins * 2, levelTime.toFixed(1)); }); };
+      nb.classList.remove('hidden'); $('end').classList.remove('hidden');
+    }, 1500);
   }
+  function nextLevel() { if (!$('end').classList.contains('hidden') || mode === 'win') { $('end').classList.add('hidden'); window.YSDK.showFullscreen(startLevel); } }
   function showLost() {
     $('end-emoji').textContent = lostReason === 'crushed' ? '📦🚗' : '📦🕳️';
     $('end-title').textContent = lostReason === 'crushed' ? L.crushed : L.fell; $('end-text').textContent = lostReason === 'crushed' ? L.crushedText : L.fellText;
     const bc = $('btn-continue'); bc.classList.remove('hidden'); bc.disabled = false; bc.lastElementChild.textContent = L.cont;
     bc.onclick = () => window.YSDK.showRewarded(() => { $('end').classList.add('hidden'); parcel.mesh.scale.set(1, 1, 1); parcel.state = 'carried'; carrying = true; parcel.mesh.visible = true; mode = 'play'; resetPlayerAt(safePos || startPos); player.ch.root.visible = true; });
-    $('btn-next').classList.add('hidden'); $('end').classList.remove('hidden');
+    $('btn-next').classList.add('hidden'); $('btn-retry').classList.remove('hidden'); $('end').classList.remove('hidden');
   }
 
   // ---- Эффекты ----
@@ -653,7 +659,7 @@
     if (!player) return;
     if (window.__camLock) { camera.position.fromArray(window.__camLock[0]); camera.lookAt(tmpV.fromArray(window.__camLock[1])); return; }
     const p = player.pos;
-    camT.set(p.x, GROUND + 15.5, p.z - 8.6);
+    if (portrait) camT.set(p.x, GROUND + 21, p.z - 9.5); else camT.set(p.x, GROUND + 15.5, p.z - 8.6);
     camera.position.lerp(camT, 1 - Math.exp(-5 * dt));
     lookT.set(p.x, GROUND + 0.6, p.z + 1.2); camera.lookAt(lookT);
     if (camShake > 0) { camShake -= dt; camera.position.x += (Math.random() - 0.5) * camShake * 0.6; camera.position.y += (Math.random() - 0.5) * camShake * 0.6; }
@@ -690,8 +696,8 @@
     window.addEventListener('keydown', (e) => { if (map[e.code]) { input.keys[map[e.code]] = true; e.preventDefault(); } if (e.code === 'Space') { if (!e.repeat) input.jump = 0.15; e.preventDefault(); } if (e.code === 'Escape' && mode === 'play') pause(); });
     window.addEventListener('keyup', (e) => { if (map[e.code]) input.keys[map[e.code]] = false; });
   }
-  function pause() { if (mode !== 'play') return; mode = 'pause'; $('pause').classList.remove('hidden'); }
-  function resume() { $('pause').classList.add('hidden'); mode = 'play'; }
+  function pause() { if (mode !== 'play') return; mode = 'pause'; $('pause').classList.remove('hidden'); window.YSDK.event('level_paused', save.level); }
+  function resume() { $('pause').classList.add('hidden'); mode = 'play'; window.YSDK.event('level_resumed', save.level); }
 
   function loop() {
     requestAnimationFrame(loop);
@@ -705,7 +711,8 @@
 
   function init() {
     detectLang(); initThree(); setupInput();
-    const loader = new T.GLTFLoader(); let left = 3;
+    const loader = new T.GLTFLoader(); let left = 3; const prog = {};
+    const onProg = (k) => (e) => { if (!e.total) return; prog[k] = [e.loaded, e.total]; let a = 0, b2 = 0; Object.values(prog).forEach((v) => { a += v[0]; b2 += v[1]; }); const pc = Math.min(99, Math.round(a / Math.max(b2, 3.4e6) * 100)); $('btn-play').textContent = L.loading.replace('…', '') + ' ' + pc + '%'; $('load-fill').style.width = pc + '%'; };
     const done = () => {
       if (--left) return;
       cityMat = new T.MeshStandardMaterial({ map: K.__map, roughness: 0.65, metalness: 0 });
@@ -719,19 +726,19 @@
       buildCity(save.level); resetPlayerAt(startPos); player.yaw = Math.atan2(target.x - startPos.x, target.z - startPos.z);
       player.ch.root.position.copy(player.pos); player.ch.root.rotation.y = player.yaw; play(player.ch, 'Idle');
       camera.position.set(player.pos.x, 12, player.pos.z - 10); $('lvl').textContent = save.level; $('coins').textContent = save.coins;
-      const b = $('btn-play'); b.disabled = false; b.textContent = L.play;
+      startLevel();
     };
     const fail = (e) => { console.error(e); $('btn-play').textContent = 'Error'; };
     const b64 = (s) => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; };
     const cityDone = (g) => { let r = g.scene; if (r.children.length === 1 && !r.children[0].isMesh) r = r.children[0]; r.children.forEach((c) => { K[c.name] = c; c.traverse((m) => { if (m.isMesh && m.material.map) { m.material.map.encoding = T.sRGBEncoding; K.__map = m.material.map; } }); }); done(); };
     const courierDone = (g) => { courierTmpl = g.scene; courierClips = g.animations; g.scene.traverse((m) => { if (m.isMesh && m.material.map) m.material.map.encoding = T.sRGBEncoding; }); done(); };
-    if (window.CITY_GLB_B64) loader.parse(b64(window.CITY_GLB_B64), '', cityDone, fail); else loader.load('assets/city.glb', cityDone, undefined, fail);
+    if (window.CITY_GLB_B64) loader.parse(b64(window.CITY_GLB_B64), '', cityDone, fail); else loader.load('assets/city.glb', cityDone, onProg('c'), fail);
     const dogDone = (g) => { dogTmpl = g.scene; dogClips = g.animations; done(); };
-    if (window.DOG_GLB_B64) loader.parse(b64(window.DOG_GLB_B64), '', dogDone, fail); else loader.load('assets/dog.glb', dogDone, undefined, fail);
-    if (window.COURIER_GLB_B64) loader.parse(b64(window.COURIER_GLB_B64), '', courierDone, fail); else loader.load('assets/courier.glb', courierDone, undefined, fail);
+    if (window.DOG_GLB_B64) loader.parse(b64(window.DOG_GLB_B64), '', dogDone, fail); else loader.load('assets/dog.glb', dogDone, onProg('d'), fail);
+    if (window.COURIER_GLB_B64) loader.parse(b64(window.COURIER_GLB_B64), '', courierDone, fail); else loader.load('assets/courier.glb', courierDone, onProg('k'), fail);
 
     $('btn-play').addEventListener('click', () => { if (window.GameAudio) GameAudio.sfx('click'); startLevel(); });
-    $('btn-next').addEventListener('click', () => { $('end').classList.add('hidden'); window.YSDK.showFullscreen(startLevel); });
+    $('btn-next').addEventListener('click', () => { clearInterval(win._iv); nextLevel(); });
     $('btn-retry').addEventListener('click', () => { $('end').classList.add('hidden'); if (mode === 'win') save.level = Math.max(1, save.level - 1); window.YSDK.showFullscreen(startLevel); });
     $('btn-pause').addEventListener('click', pause); $('btn-resume').addEventListener('click', resume);
     $('btn-restart').addEventListener('click', () => { $('pause').classList.add('hidden'); startLevel(); });

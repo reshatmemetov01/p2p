@@ -16,10 +16,10 @@
   const TEXTS = {
     en: { title1: 'PARKING', title2: 'ESCAPE', easy: 'Easy', medium: 'Medium', hard: 'Hard', level: 'Level', moves: 'Moves', best: 'Best',
       howto: 'Slide the cars to free the way for the red car!', done: 'Level complete!', next: 'Next ▶', replay: 'Replay',
-      info: (m, b) => 'Moves: ' + m + ' · Best possible: ' + b, tip: 'Drag the cars to clear the way →', noHint: 'Ad not available, try later' },
+      info: (m, b) => 'Moves: ' + m + ' · Best possible: ' + b, nextIn: (n) => 'Next ▶ ' + n, tip: 'Drag the cars to clear the way →', noHint: 'Ad not available, try later' },
     ru: { title1: 'ПАРКОВКА', title2: 'ВЫЕЗД', easy: 'Лёгкий', medium: 'Средний', hard: 'Сложный', level: 'Уровень', moves: 'Ходы', best: 'Лучший',
       howto: 'Двигай машины, чтобы освободить путь красной машине!', done: 'Уровень пройден!', next: 'Дальше ▶', replay: 'Ещё раз',
-      info: (m, b) => 'Ходов: ' + m + ' · Минимум: ' + b, tip: 'Двигай машины, освободи выезд →', noHint: 'Реклама недоступна, попробуй позже' },
+      info: (m, b) => 'Ходов: ' + m + ' · Минимум: ' + b, nextIn: (n) => 'Дальше ▶ ' + n, tip: 'Двигай машины, освободи выезд →', noHint: 'Реклама недоступна, попробуй позже' },
   };
   const RU_LANGS = ['ru', 'be', 'uk', 'kk', 'uz', 'ky', 'tg', 'hy', 'az', 'tt'];
   let L = TEXTS.en;
@@ -238,7 +238,8 @@
     $('lvl-title').textContent = L.level + ' ' + (i + 1);
     $('best').textContent = optimal;
     $('win').classList.add('hidden');
-    buildBoard(); updateHud();
+    buildBoard(); updateHud(); save.last = diff; persist();
+    if (window.YSDK && window.YSDK.event) window.YSDK.event('level_started', diff + '-' + (i + 1));
     if (diff === 'easy' && i === 0) toast(L.tip, 3200);
   }
   function updateHud() { $('moves').textContent = moves; $('btn-undo').disabled = !history.length || solved; }
@@ -263,9 +264,13 @@
       $('win-info').textContent = L.info(moves, optimal);
       $('win').classList.remove('hidden');
       if (window.GameAudio) GameAudio.sfx('win');
+      const nb = $('btn-next'); let n = 3; nb.textContent = L.nextIn(n);
+      clearInterval(win._iv); win._iv = setInterval(() => { if (--n <= 0) { clearInterval(win._iv); next(); } else nb.textContent = L.nextIn(n); }, 1000);
     }, 650);
+    if (window.YSDK && window.YSDK.event) window.YSDK.event('level_completed', diff + '-' + (idx + 1));
   }
   function next() {
+    clearInterval(win._iv); if ($('win').classList.contains('hidden')) return;
     $('win').classList.add('hidden');
     const go = () => loadLevel(diff, idx + 1);
     if (window.YSDK && window.YSDK.showFullscreen) window.YSDK.showFullscreen(go); else go();
@@ -288,7 +293,7 @@
     detectLang();
     $('menu').querySelector('.logo-car').innerHTML = carSVG(2, true, 1, '#ff3b4e', true, '');
     document.querySelectorAll('.diff').forEach((b) => b.addEventListener('click', () => startDiff(b.dataset.d)));
-    $('btn-back').addEventListener('click', () => { if (window.GameAudio) GameAudio.sfx('click'); showMenu(); });
+    $('btn-back').addEventListener('click', () => { clearInterval(win._iv); if (window.GameAudio) GameAudio.sfx('click'); showMenu(); });
     $('btn-restart').addEventListener('click', () => { if (busy) return; if (window.GameAudio) GameAudio.sfx('click'); loadLevel(diff, idx); });
     $('btn-undo').addEventListener('click', undo);
     $('btn-hint').addEventListener('click', () => {
@@ -297,10 +302,11 @@
       if (window.YSDK && window.YSDK.showRewarded) window.YSDK.showRewarded(doHint); else doHint();
     });
     $('btn-next').addEventListener('click', next);
-    $('btn-replay').addEventListener('click', () => loadLevel(diff, idx));
+    $('btn-replay').addEventListener('click', () => { clearInterval(win._iv); loadLevel(diff, idx); });
     const sb = $('sound-btn'); if (sb && window.GameAudio) GameAudio.attachButton(sb);
     window.addEventListener('resize', () => { if (cars.length) layout(); });
     updateMenu();
+    startDiff(DIFFS.indexOf(save.last) >= 0 ? save.last : 'easy');
 
     // API для автотестов
     window.__parking = {

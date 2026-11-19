@@ -12,7 +12,7 @@
   // ---- Языки: английский по умолчанию, русский для русскоязычных ----
   const TEXTS = {
     en: {
-      title: 'CROWD RUSH', hint: 'Drag left and right', loading: 'Loading…', loadErr: 'Loading error', play: 'Play!',
+      title: 'CROWD RUSH', hint: 'Drag left and right', tapStart: '👆 Touch and drag to start!', nextIn: (n) => 'Next ▶ ' + n, loading: 'Loading…', loadErr: 'Loading error', play: 'Play!',
       intro: 'Lead your crowd with your finger. Pick the best gates, avoid pits, beat the red crowds and reach the finish stairs!',
       fallen: 'Crowd lost!', passed: 'Progress', runCoins: 'Coins this run', revive: 'Continue (watch ad)',
       x2: 'Double coins', upgrades: '🔧 Upgrades', again: 'Retry', next: 'Next ▶', levelDone: (l) => 'Level ' + l + ' complete!',
@@ -20,7 +20,7 @@
       upStart: '👥 Starting crowd', upIncome: '💰 Income', inStart: ' at start', coinsPct: '% coins', lvl: 'Lv.', max: 'MAX', sound: 'Sound',
     },
     ru: {
-      title: 'ТОЛПА', hint: 'Веди пальцем влево-вправо', loading: 'Загрузка…', loadErr: 'Ошибка загрузки', play: 'В бой!',
+      title: 'ТОЛПА', hint: 'Веди пальцем влево-вправо', tapStart: '👆 Коснись и веди пальцем — поехали!', nextIn: (n) => 'Дальше ▶ ' + n, loading: 'Загрузка…', loadErr: 'Ошибка загрузки', play: 'В бой!',
       intro: 'Веди толпу пальцем. Выбирай выгодные воротца, обходи пропасти, побеждай красные толпы и добеги до финишной лестницы!',
       fallen: 'Толпа пала!', passed: 'Пройдено', runCoins: 'Монеты за забег', revive: 'Продолжить за рекламу',
       x2: 'Удвоить монеты', upgrades: '🔧 Прокачка', again: 'Заново', next: 'Дальше ▶', levelDone: (l) => 'Уровень ' + l + ' пройден!',
@@ -160,14 +160,14 @@
       for (let i = 0; i < FCAP; i++) fallers.push({ ch: makeChar(matBlue), life: 0, x: 0, y: 0, wz: 0, vy: 0, rot: 0 });
       loaded = true;
       const b = $('btn-start'); b.disabled = false; b.textContent = L.play;
-      resetCrowdIdle();
+      resetCrowdIdle(); hideScreens(); const th = $('tap-hint'); th.textContent = L.tapStart; th.style.display = '';
     };
     const onErr = (e) => { console.error('model load failed', e); $('btn-start').textContent = L.loadErr; };
     if (window.CHAR_GLB_B64) { // запасной вариант для превью: модель встроена в js
       const bin = atob(window.CHAR_GLB_B64), buf = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
       loader.parse(buf.buffer, '', onModel, onErr);
-    } else loader.load('assets/char.glb', onModel, undefined, onErr);
+    } else loader.load('assets/char.glb', onModel, (e) => { if (e.total) { const pc = Math.min(99, Math.round(e.loaded / e.total * 100)); $('btn-start').textContent = L.loading.replace('…', '') + ' ' + pc + '%'; } }, onErr);
   }
 
   function resize() {
@@ -280,14 +280,14 @@
   function startRun() {
     if (!loaded) return;
     hideScreens(); clearObjects(); clearStairs();
-    FINISH = 160 + (level - 1) * 20;
+    FINISH = Math.min(260 + (level - 1) * 25, 620);
     resetCrowdIdle(); lat = 0; targetLat = 0;
     traveled = 0; speed = 7; runCoins = 0; genDist = 14; milestones.clear();
     splats.forEach((s) => { s.on = false; }); bolts.forEach((b) => { b.on = false; }); chunks.forEach((c) => { c.life = 0; }); fallers.forEach((f) => { f.life = 0; f.ch.root.visible = false; });
     clashEn = null; mode = 'play';
     camera.position.set(CAM.x, CAM.y, CAM.z); camera.lookAt(CAM.tx, CAM.ty, CAM.tz);
-    $('tap-hint').style.display = '';
-    generateUpTo(FAR); updateHUD();
+    const th = $('tap-hint'); th.textContent = L.hint; th.style.display = '';
+    generateUpTo(FAR); updateHUD(); window.YSDK.event('level_started', level);
   }
 
   // ===== Генерация трассы =====
@@ -656,7 +656,7 @@
 
   // ===== Экраны =====
   function gameOver() {
-    if (mode === 'over') return; mode = 'over';
+    if (mode === 'over') return; mode = 'over'; window.YSDK.event('level_failed', level);
     for (let i = 0; i < 18; i++) addSplat(crowdX + (Math.random() - 0.5) * 2, traveled + (Math.random() - 0.5) * 2, C_BLUE);
     shake = 0.5;
     const dist = Math.floor(traveled);
@@ -685,7 +685,13 @@
       coins += finaleReward; $('end-coins').textContent = finaleReward * 2; $('btn-x2').disabled = true; $('btn-x2').style.opacity = 0.5; save();
       if (window.GameAudio) GameAudio.sfx('coin');
     });
-    $('btn-again').textContent = L.next; $('btn-again').onclick = () => { level++; save(); $('end').classList.add('hidden'); maybeInterstitial(startRun); };
+    window.YSDK.event('level_completed', level); level++; save();
+    const ba = $('btn-again'); let n = 4; ba.textContent = L.nextIn(n);
+    const go = () => { clearInterval(showWin._iv); $('end').classList.add('hidden'); maybeInterstitial(startRun); };
+    clearInterval(showWin._iv); showWin._iv = setInterval(() => { if (--n <= 0) go(); else ba.textContent = L.nextIn(n); }, 1000);
+    ba.onclick = go;
+    const x2 = $('btn-x2').onclick; $('btn-x2').onclick = () => { clearInterval(showWin._iv); ba.textContent = L.next; x2(); };
+    const up = $('btn-upgrades'); up.addEventListener('click', () => clearInterval(showWin._iv), { once: true });
     end.classList.remove('hidden');
   }
   function hideScreens() { ['start', 'end', 'shop'].forEach((id) => $(id).classList.add('hidden')); }
@@ -716,7 +722,7 @@
 
   // ===== Реклама =====
   let runCount = 0;
-  function maybeInterstitial(after) { runCount++; if (runCount % 3 === 0) window.YSDK.showFullscreen(after); else after(); }
+  function maybeInterstitial(after) { runCount++; window.YSDK.showFullscreen(after); }
   function revive() {
     window.YSDK.showRewarded(() => {
       N = Math.max(20, 10 + upg.start * 2); mode = 'play'; clashEn = null;
@@ -737,7 +743,7 @@
   function bindInput() {
     const toLat = (e) => { const r = canvas.getBoundingClientRect(); return Math.max(-1, Math.min(1, ((e.clientX - r.left) - r.width / 2) / (r.width * 0.4))); };
     let dragging = false;
-    canvas.addEventListener('pointerdown', (e) => { if (mode === 'play') { dragging = true; targetLat = toLat(e); } });
+    canvas.addEventListener('pointerdown', (e) => { if (mode === 'ready' && loaded && $('start').classList.contains('hidden') && $('end').classList.contains('hidden') && $('shop').classList.contains('hidden')) startRun(); if (mode === 'play') { dragging = true; targetLat = toLat(e); } });
     canvas.addEventListener('pointermove', (e) => { if (dragging) targetLat = toLat(e); });
     canvas.addEventListener('pointerup', () => { dragging = false; });
     canvas.addEventListener('pointercancel', () => { dragging = false; });
