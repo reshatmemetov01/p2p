@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Lucky Block Survival</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+    <div id="labels"></div>
+
+    <div class="hud">
+      <div class="hud-left">
+        <button class="icon-btn" id="btn-pause" aria-label="pause">⏸</button>
+        <div class="hearts" id="hearts"></div>
+      </div>
+      <div class="hud-mid">
+        <div class="score"><span id="score">0</span></div>
+        <div class="timer" id="timer">0:00</div>
+      </div>
+      <div class="hud-right"><div class="coins"><span id="coins">0</span><i>●</i></div></div>
+    </div>
+    <div class="powers" id="powers"></div>
+    <div class="banner hidden" id="banner"></div>
+    <div class="tip hidden" id="tip"></div>
+
+    <div class="joy hidden" id="joy"><div class="joy-knob" id="joy-knob"></div></div>
+    <button class="act-btn" id="btn-hit" aria-label="hit">🪓</button>
+    <button class="act-btn small" id="btn-jump" aria-label="jump">⤒</button>
+
+    <div id="loading" class="screen">
+      <div class="card">
+        <div class="logo"><div class="l1">LUCKY BLOCK</div><div class="l2">SURVIVAL</div></div>
+        <div class="load-bar"><div id="load-fill"></div></div>
+        <p class="sub" id="load-text">Loading…</p>
+      </div>
+    </div>
+
+    <div id="end" class="screen hidden">
+      <div class="card">
+        <div class="big">💀</div>
+        <h2 data-i18n="over">You died!</h2>
+        <div class="stats" id="end-stats"></div>
+        <button class="btn btn-reward" id="btn-revive">▶ <span data-i18n="revive">Revive (watch ad)</span></button>
+        <button class="btn btn-reward" id="btn-x2">▶ <span data-i18n="x2">Double coins (watch ad)</span></button>
+        <div class="row">
+          <button class="btn btn-ghost" id="btn-shop" data-i18n="shop">🛒 Upgrades</button>
+          <button class="btn btn-main" id="btn-again" data-i18n="again">Play again</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="shop" class="screen hidden">
+      <div class="card wide">
+        <h2 data-i18n="shopTitle">🛒 Upgrades</h2>
+        <div class="balance">● <span id="shop-coins">0</span></div>
+        <div id="upgrades"></div>
+        <button class="btn btn-main" id="btn-shop-close" data-i18n="play">Play!</button>
+      </div>
+    </div>
+
+    <div id="pause" class="screen hidden">
+      <div class="card">
+        <h2 data-i18n="paused">Paused</h2>
+        <button class="btn btn-main" id="btn-resume" data-i18n="resume">Resume</button>
+        <button class="btn btn-ghost" id="btn-quit" data-i18n="quit">Give up</button>
+        <button class="sound-btn" id="sound-btn">🔊</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/three.min.js"></script>
+  <script src="js/GLTFLoader.js"></script>
+  <script src="js/SkeletonUtils.js"></script>
+  <script src="https://bridge.playgama.com/v2/stable/playgama-bridge.js"></script>
+  <script src="js/bridge-sdk.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
